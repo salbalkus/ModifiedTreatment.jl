@@ -2,5 +2,8 @@
 CausalTables = "6af48e0c-efc2-4bf7-a92f-a553ccf79fd6"
 Condensity = "4a3ed1f2-33f5-4d2a-92e9-d08cf3575152"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+MLJBase = "a7f614a8-145f-11e9-1d2a-a57a1082229d"
 ModifiedTreatment = "850ff2fb-1851-4098-84a9-06d36a9b9803"
+TableOperations = "ab02a1b2-a7df-11e8-156e-fb1833f50b87"
+Tables = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"

@@ -1,17 +1,17 @@
 module ModifiedTreatment
 
-using CausalTables
-using MLJModelInterface
-using GLM
-using StatsBase
+    using CausalTables
+    using MLJModelInterface
+    using GLM
+    using StatsBase
 
-import Base: merge
+    import Base: merge
 
-const MMI = MLJModelInterface
+    const MMI = MLJModelInterface
 
-include("intervention.jl")
+    include("intervention.jl")
 
-export Intervention, ShiftIntervention
-export fit, transform, inverse_transform, predict
+    export Intervention
+    export fit, transform, inverse_transform, predict
 
 end
