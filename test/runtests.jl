@@ -3,8 +3,6 @@ using ModifiedTreatment
 using CausalTables
 using Distributions
 using MLJBase
-using ForwardDiff
-using DiffResults
 
 #using Condensity 
 
@@ -13,31 +11,46 @@ distseq = [
         :A => (; O...) -> (@. Normal(O[:L1], 1)),
         :Y => (; O...) -> (@. Normal(O[:A] + 0.2 * O[:L1], 1))
     ]
-dgp_iid = DataGeneratingProcess(distseq, :A, :Y, [:L1])
 
+dgp_iid = DataGeneratingProcess(distseq, :A, :Y, [:L1])
 data_iid = rand(dgp_iid, 10)
 
+
 #@testset "Intervention" begin
-    shift = 1.0
-    additive(A, δ, O) = A + δ
+    int1 = AdditiveShift(0.5)
+    int2 = MultiplicativeShift(1.5)
+    int3 = LinearShift(1.5, 0.5)
 
-    foo = (A) -> additive(A, shift, data_iid)
-    x = gettreatment(data_iid)
-    xd = gettreatment(data_iid)
+    L = getcontrols(data_iid)
+    A = gettreatment(data_iid)
 
-    #result = ForwardDiff.gradient!(result, foo, x)
-    
+    apply_intervention(int3, A, L)
 
-    ForwardDiff.derivative.(foo, 1.0)
-    
-    inv_additive(A, δ, O) = A - δ
+    A .* 1.5 .+ 0.5
 
-    intervention = Intervention(additive, inv_additive)
-    mach = machine(intervention, data_iid) |> fit!
+    @test all(apply_intervention(int1, A, L) .== A .+ 0.5)
+    @test all(apply_inverse_intervention(int1, A, L) .== A .- 0.5)
+    @test all(differentiate_intervention(int1, A, L) .== 1)
+    @test all(differentiate_inverse_intervention(int1, A, L) .== 1)
 
-    @test predict(mach, shift).tbl == data_iid.tbl
-    @test all(gettreatment(transform(mach, shift)) .== gettreatment(data_iid) .+ shift)
-    @test all(gettreatment(inverse_transform(mach, shift)) .== gettreatment(data_iid) .- shift)
+    @test all(apply_intervention(int2, A, L) .== A .* 1.5)
+    @test all(apply_inverse_intervention(int2, A, L) .== A ./ 1.5)
+    @test all(differentiate_intervention(int2, A, L) .== 1.5)
+    @test all(differentiate_inverse_intervention(int2, A, L) .== 1/1.5)
+
+    @test all(apply_intervention(int3, A, L) .== A .* 1.5 .+ 0.5)
+    @test all(apply_inverse_intervention(int3, A, L) .== (A .- 0.5) ./ 1.5)
+    @test all(differentiate_intervention(int3, A, L) .== 1.5)
+    @test all(differentiate_inverse_intervention(int3, A, L) .== 1/1.5)
+
+    neighborsum = NeighborSum(:A)
+    inducedint = get_induced_intervention(int3, neighborsum)
+    apply_intervention(inducedint, A, L)
+
+    @test all(apply_intervention(inducedint, A, L) .== A .* 1.5 .+ 0.5)
+    @test all(apply_inverse_intervention(int3, A, L) .== (A .- 0.5) ./ 1.5)
+    @test all(differentiate_intervention(int3, A, L) .== 1.5)
+    @test all(differentiate_inverse_intervention(int3, A, L) .== 1/1.5)
 
 
 #end
