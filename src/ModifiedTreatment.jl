@@ -1,9 +1,12 @@
 module ModifiedTreatment
 
-    using CausalTables
     using MLJModelInterface
     using GLM
     using StatsBase
+    using Tables
+    using TableOperations
+    using CausalTables
+
 
     import Base: merge
 
@@ -13,5 +16,6 @@ module ModifiedTreatment
 
     export Intervention
     export fit, transform, inverse_transform, predict
+    export replace_treatment
 
 end

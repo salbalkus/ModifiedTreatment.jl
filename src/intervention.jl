@@ -9,11 +9,11 @@ mutable struct Intervention <: MMI.Unsupervised
     deriv::Union{Function, Nothing}
     function Intervention(func, inverse, deriv)
         if !applicable(func, Vector, Float64, CausalTable)
-            error("ShiftIntervention: func must be a function of type (Vector, Float64, CausalTable) -> Vector")
+            error("Intervention: func must be a function of type (Vector, Float64, CausalTable) -> Vector")
         elseif !applicable(inverse, Vector, Float64, CausalTable)
-            error("ShiftIntervention: inverse must be a function of type (Vector, Float64, CausalTable) -> Vector")
+            error("Intervention: inverse must be a function of type (Vector, Float64, CausalTable) -> Vector")
         elseif !isnothing(deriv) && !applicable(deriv, Vector, Float64, CausalTable)
-            error("ShiftIntervention: deriv must be a function of type (Vector, Float64, CausalTable) -> Vector")
+            error("Intervention: deriv must be a function of type (Vector, Float64, CausalTable) -> Vector")
         end
         return new(func, inverse, deriv)
     end
@@ -40,8 +40,13 @@ MMI.predict(model::Intervention, fitresult, δ) = CausalTables.summarize(fitresu
 
 function MMI.transform(model::Intervention, fitresult, δ)
     # create second closure
-    apply_intervention = A -> intervene(A, δ)
+    apply_intervention = A -> fitresult.intervene(A, δ)
     
+    result = DiffResults.DiffResult.(x, xd) 
+    result = ForwardDiff.derivative!.(result, foo, 1.0)
+
+    DiffResults.value.(result)
+
     # Compute the treatment
     new_treatment = apply_intervention(gettreatment(fitresult.ct))
     new_ct = replace_treatment(fitresult.ct, new_treatment)
@@ -50,7 +55,7 @@ end
 
 function MMI.inverse_transform(model::Intervention, fitresult, δ)
     # create second closure
-    apply_intervention = A -> inverse_intervene(A, δ)
+    apply_intervention = A -> fitresult.inverse_intervene(A, δ)
     
     # Compute the treatment
     new_treatment = apply_intervention(gettreatment(fitresult.ct))
@@ -59,12 +64,14 @@ function MMI.inverse_transform(model::Intervention, fitresult, δ)
 end
 
 # Create a new CausalTable with an intervened treatment and dropped response
-replace_treatment(ct::CausalTable, new_treatment::Vector) = CausalTable(
-    merge(NamedTuple{ct.treatment}(new_treatment), TableOperations.select(ct.tbl, ct.controls) |> Tables.columntable)
-    gettreatment(ct),
-    getresponse(ct),
-    getcontrols(ct)
-    getgraph(ct),
-    getsummaries(ct)
+function replace_treatment(ct::CausalTable, new_treatment::Vector)
+    tbl = merge(NamedTuple{(ct.treatment,)}((new_treatment,)), Tables.columntable(TableOperations.select(ct.tbl, ct.controls...)))
+    return CausalTable(tbl,
+    ct.treatment,
+    ct.response,
+    ct.controls,
+    ct.graph,
+    ct.summaries
 )
+end
 
