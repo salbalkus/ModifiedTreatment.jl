@@ -1,7 +1,7 @@
 
 # Overload CausalTable functions for nodes
 gettreatment(O::AbstractNode) = node(CausalTables.gettreatment, O)
-getresponse(O::AbstractNode) = node(CausalTables.gettarget, O)
+getresponse(O::AbstractNode) = node(CausalTables.getresponse, O)
 getgraph(O::AbstractNode) = node(CausalTables.getgraph, O)
 getsummaries(O::AbstractNode) = node(CausalTables.getsummaries, O)
 summarize(O::AbstractNode) = node(CausalTables.summarize, O)
