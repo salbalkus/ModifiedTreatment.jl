@@ -3,15 +3,15 @@ mutable struct InterventionModel <: MMI.Unsupervised end
 
 function MMI.fit(m::InterventionModel, verbosity, O)
     # TODO: Assumes only a single treatment is specified.
-    LAs = replacetable(O, TableOperations.select(summarize(O), setdiff(keys(O.tbl), (O.response,))...) |> Tables.columntable)
-    summaryvars = [get_var_to_summarize(s) for s in LAs.summaries]
+    LAs = CausalTables.replacetable(O, TableOperations.select(CausalTables.summarize(O), setdiff(keys(O.tbl), (O.response,))...) |> Tables.columntable)
+    summaryvars = [CausalTables.get_var_to_summarize(s) for s in LAs.summaries]
     summarytreatment = keys(LAs.summaries)[summaryvars .== LAs.treatment]
     Lstbl = TableOperations.select(LAs, vcat(LAs.controls, keys(LAs.summaries)[summaryvars .!= LAs.treatment]...)...) |> Tables.columntable
-    Ls = replacetable(LAs, Lstbl)
+    Ls = CausalTables.replacetable(LAs, Lstbl)
     
     fitresult = (; 
                 LAs = LAs,
-                A = gettreatment(LAs),
+                A = CausalTables.gettreatment(LAs),
                 Ls = Ls,
                 summarytreatment = summarytreatment
                 )
@@ -44,7 +44,7 @@ function MMI.transform(m::InterventionModel, fitresult, Δ::Intervention)
     t = (fitresult.LAs.treatment,)
     Aderivatives = merge(NamedTuple{t}((Aδd,)), NamedTuple(Aδsd))
     Aδinterventions = merge(NamedTuple{t}((Aδ,)), NamedTuple(Aδs))
-    LAδinterventions = replacetable(fitresult.Ls, merge(fitresult.Ls.tbl, Aδinterventions))
+    LAδinterventions = CausalTables.replacetable(fitresult.Ls, merge(fitresult.Ls.tbl, Aδinterventions))
     return LAδinterventions, Aderivatives
 end
 
@@ -65,6 +65,6 @@ function MMI.inverse_transform(m::InterventionModel, fitresult, Δ::Intervention
     t = (fitresult.LAs.treatment,)
     Aderivatives = merge(NamedTuple{t}((Aδd,)), NamedTuple(Aδsd))
     Aδinterventions = merge(NamedTuple{t}((Aδ,)), NamedTuple(Aδs))
-    LAδinterventions = replacetable(fitresult.Ls, merge(fitresult.Ls.tbl, Aδinterventions))
+    LAδinterventions = CausalTables.replacetable(fitresult.Ls, merge(fitresult.Ls.tbl, Aδinterventions))
     return LAδinterventions, Aderivatives
 end

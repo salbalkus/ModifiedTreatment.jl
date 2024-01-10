@@ -3,19 +3,21 @@ using ModifiedTreatment
 using CausalTables
 using Distributions
 using MLJBase
+using MLJLinearModels
+using MLJModels
 using Graphs
+using Condensity 
 
-#using Condensity 
-neighborsum = NeighborSum(:A)
 distseq = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
         :L1 => (; O...) -> DiscreteUniform(1, 5),
-        :A => (; O...) -> (@. Normal(O[:L1], 1)),
-        :A_s => neighborsum,
+        :L1_s => NeighborSum(:L1),
+        :A => (; O...) -> (@. Normal(O[:L1] + 0.2 * O[:L1_s], 1)),
+        :A_s => NeighborSum(:A),
         :Y => (; O...) -> (@. Normal(O[:A] + O[:A_s] + 0.2 * O[:L1], 1))
     ])
 
-dgp = DataGeneratingProcess(n -> erdos_renyi(n, 0.4), distseq; treatment = :A, response = :Y, controls = [:L1]);
-data = rand(dgp, 10)
+dgp = DataGeneratingProcess(n -> erdos_renyi(n, 3/n), distseq; treatment = :A, response = :Y, controls = [:L1]);
+data = rand(dgp, 100)
 
 @testset "Intervention" begin
     int1 = AdditiveShift(0.5)
@@ -40,7 +42,7 @@ data = rand(dgp, 10)
     @test differentiate_intervention(int3, A, L) == 1.5
     @test differentiate_inverse_intervention(int3, A, L) == 1/1.5
 
-    inducedint = get_induced_intervention(int3, neighborsum)
+    inducedint = get_induced_intervention(int3, NeighborSum(:A))
 
     @test apply_intervention(inducedint, A, L) == A .* 1.5 .+ adjacency_matrix(data.graph) * (ones(nv(data.graph)) .* 0.5)
     @test apply_inverse_intervention(inducedint, A, L) == (A .- adjacency_matrix(data.graph) * (ones(nv(data.graph)) .* 0.5)) ./ 1.5
@@ -53,10 +55,11 @@ end
     intervention = LinearShift(1.5, 0.5)
     intmach = machine(InterventionModel(), data) |> fit!
     LAs, Ls, As = predict(intmach, intervention)  
-    @test Ls.tbl == (L1 = data.tbl.L1,)
-    @test As == (A = data.tbl.A, A_s = data.tbl.A_s)
-    @test LAs.tbl == (L1 = data.tbl.L1, A = data.tbl.A, A_s = data.tbl.A_s)
     
+    @test Ls.tbl == (L1 = data.tbl.L1, L1_s = data.tbl.L1_s)
+    @test As == (A = data.tbl.A, A_s = data.tbl.A_s)
+    @test LAs.tbl == (L1 = data.tbl.L1, L1_s = data.tbl.L1_s, A = data.tbl.A, A_s = data.tbl.A_s)
+
     LAδs, Aδsd = transform(intmach, intervention)
     @test LAδs.tbl.A ≈ data.tbl.A .* 1.5 .+ 0.5
     @test LAδs.tbl.A_s ≈ adjacency_matrix(data.graph) * ((data.tbl.A .* 1.5) .+ 0.5)
@@ -69,3 +72,16 @@ end
     @test Aδsdinv.A == 1/1.5
     @test Aδsdinv.A == 1/1.5
 end
+
+#@testset "MTP"
+
+    mean_estimator = LinearRegressor()
+    density_ratio_estimator = OracleDensityEstimator(dgp)
+    boot_sampler = nothing
+    cv_splitter = nothing
+
+    mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
+    mtpmach = machine(mtp, data) |> fit!
+
+    
+#end
