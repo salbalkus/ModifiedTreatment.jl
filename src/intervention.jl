@@ -34,7 +34,7 @@ differentiate_inverse_intervention(intervention::LinearShift, A, L) = 1 ./ inter
 
 
 function get_induced_intervention(intervention::LinearShift, summary::NeighborSum)
-    return LinearShift(intervention.δa, L -> Graphs.adjacency_matrix(L.graph) * intervention.δb(L) )
+    return LinearShift(intervention.δa, L -> Graphs.adjacency_matrix(L.graph) * (ones(nv(L.graph)) .* intervention.δb(L)))
 end
 
 

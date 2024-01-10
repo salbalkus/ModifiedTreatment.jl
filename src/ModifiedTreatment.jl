@@ -14,12 +14,14 @@ module ModifiedTreatment
     const MMI = MLJModelInterface
 
     include("intervention.jl")
-
     export Intervention
     export LinearShift, AdditiveShift, MultiplicativeShift
     export apply_intervention, apply_inverse_intervention 
     export differentiate_intervention, differentiate_inverse_intervention
     export get_induced_intervention
+
+    include("interventionmodel.jl")
+    export InterventionModel
 
     export fit, transform, inverse_transform, predict
     export replace_treatment

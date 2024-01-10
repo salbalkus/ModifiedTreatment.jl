@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "6117744e7ee4627a3ce529a74f6fd96451205e86"
+project_hash = "5aa8aaeb512090654c93f40734fd4a2daa677505"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -793,7 +793,7 @@ version = "1.1.0"
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[deps.ModifiedTreatment]]
-deps = ["CausalTables", "DiffResults", "ForwardDiff", "GLM", "MLJBase", "MLJModelInterface", "StatsBase", "TableOperations", "Tables"]
+deps = ["CausalTables", "DiffResults", "ForwardDiff", "GLM", "Graphs", "MLJBase", "MLJModelInterface", "StatsBase", "TableOperations", "Tables"]
 path = "C:\\Users\\salba\\.julia\\dev\\ModifiedTreatment"
 uuid = "850ff2fb-1851-4098-84a9-06d36a9b9803"
 version = "1.0.0-DEV"

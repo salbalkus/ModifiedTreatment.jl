@@ -1,5 +1,4 @@
 mutable struct MTP <: MLJBase.UnsupervisedNetworkComposite
-    intervention::Intervention
     mean_estimator::MLJBase.Supervised
     density_ratio_estimator::MLJBase.Supervised
     boot_sampler
@@ -15,31 +14,29 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
     O = source(O)
     Y = getresponse(O)
 
-    model_intervention = MTP.InterventionModel(mtp.intervention)
+    model_intervention = InterventionModel()
     mach_intervention = machine(model_intervention, O)
 
-    LA = MLJBase.predict(mach_intervention, δ)
-    L = getcontrols(LA)
-    A = gettreatment(LA)
+    LAs, Ls, As = MLJBase.predict(mach_intervention, δ)
 
-    LAδ = MLJBase.transform(mach_intervention, δ)
-    LAδinv = MLJBase.inverse_transform(mach_intervention, δ)
+    LAδs, dAδs = transform(intmach, intervention)
+    LAδsinv, dAδsinv = inverse_transform(intmach, intervention)
 
     if isnothing(mtp.cv_splitter)
-        mach_mean = machine(mtp.mean_estimator, LA, Y)
-        mach_density = machine(mtp.density_ratio_estimator, L, A)
+        mach_mean = machine(mtp.mean_estimator, LAs, Y)
+        mach_density = machine(mtp.density_ratio_estimator, Ls, As)
     else
-        mach_mean = machine(CrossFitModel(:mean_estimator, mtp.cv_splitter), LA, Y)
-        mach_density = machine(CrossFitModel(:density_ratio_estimator, mtp.cv_splitter), L, A)
+        mach_mean = machine(CrossFitModel(:mean_estimator, mtp.cv_splitter), LAs, Y)
+        mach_density = machine(CrossFitModel(:density_ratio_estimator, mtp.cv_splitter), Ls, As)
     end
 
     # Get outcome regression predictions
-    Qn = MLJBase.predict(mach_mean, LA)
-    Qδn = MLJBase.predict(mach_mean, LAδ)
+    Qn = MLJBase.predict(mach_mean, LAs)
+    Qδn = MLJBase.predict(mach_mean, LAδs)
 
     # Get Density Ratio
-    Hn = MLJBase.transform(mach_density, LAδinv, LA)
-    Hshiftn = MLJBase.transform(mach_density, LA, LAδ)
+    Hn = MLJBase.transform(mach_density, LAδsinv, LAs) .* dAδs
+    Hshiftn = MLJBase.transform(mach_density, LAs, LAδs) .* dAδsinv
 
     static_vars = node((Y, Qn) -> (Y = Y, Qn = Qn), Y, Qn)
     policy_vars = node((Qδn, Hn, Hshiftn) -> (Qδn = Qδn, Hn = Hn, Hshiftn = Hshiftn), Qδn, Hn, Hshiftn)
@@ -50,7 +47,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
     # Conservative EIF variance estimate
     mach_consvar = machine(MTP.EIFConservative(), Y, Qn, gdf_source) |> fit!
     consvar = MLJBase.transform(mach_consvar, Qδn, Hn)
-    onestep = merge(onestep, consvar)
+    onestep = merge(estimates[1], consvar)
     tmle = merge(tmle, consvar)
 
     # Bootstrap
