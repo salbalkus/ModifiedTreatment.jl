@@ -23,7 +23,7 @@ end
 
 function MMI.predict(m::InterventionModel, fitresult, Δ::Intervention)
     Asummaries = TableOperations.select(fitresult.LAs, fitresult.summarytreatment...) |> Tables.columntable
-    As = merge(NamedTuple{(fitresult.LAs.treatment,)}((fitresult.A,)), NamedTuple{fitresult.summarytreatment}(Asummaries))
+    As = merge(NamedTuple{fitresult.summarytreatment}(Asummaries), NamedTuple{(fitresult.LAs.treatment,)}((fitresult.A,)))
     return fitresult.LAs, fitresult.Ls, As
 end
 

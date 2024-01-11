@@ -10,17 +10,21 @@ MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter) = MTP(me
 
 function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
 
-    δ = source(0)
-    O = source(O)
-    Y = getresponse(O)
+    δ = source(IdentityIntervention())
+    Os = source(O)
+    Y = getresponse(Os)
 
     model_intervention = InterventionModel()
-    mach_intervention = machine(model_intervention, O)
+    mach_intervention = machine(model_intervention, Os) |> fit!
 
-    LAs, Ls, As = MMI.predict(mach_intervention, δ)
+    tmp = MMI.predict(mach_intervention, δ)
+    LAs, Ls, As = tmp[1], tmp[2], tmp[3]
+    
+    tmp = MMI.transform(mach_intervention, δ)
+    LAδs, dAδs = tmp[1], tmp[2]
 
-    LAδs, dAδs = transform(intmach, intervention)
-    LAδsinv, dAδsinv = inverse_transform(intmach, intervention)
+    tmp = MMI.inverse_transform(mach_intervention, δ)
+    LAδsinv, dAδsinv = tmp[1], tmp[2]
 
     if isnothing(mtp.cv_splitter)
         mach_mean = machine(mtp.mean_estimator, LAs, Y)
@@ -35,20 +39,17 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
     Qδn = MMI.predict(mach_mean, LAδs)
 
     # Get Density Ratio
-    Hn = MMI.transform(mach_density, LAδsinv, LAs) .* dAδs
-    Hshiftn = MMI.transform(mach_density, LAs, LAδs) .* dAδsinv
-
-    static_vars = node((Y, Qn) -> (Y = Y, Qn = Qn), Y, Qn)
-    policy_vars = node((Qδn, Hn, Hshiftn) -> (Qδn = Qδn, Hn = Hn, Hshiftn = Hshiftn), Qδn, Hn, Hshiftn)
+    Hn = MMI.predict(mach_density, LAδsinv, LAs) * prod(dAδs)
+    Hshiftn = MMI.predict(mach_density, LAs, LAδs) * prod(dAδsinv)
 
     estimators = (OutcomeRegressor(), IPW(), OneStep(), TMLE())
-    estimates = estimate_causal(estimators, static_vars, policy_vars)
+    outcome_regression, ipw, onestep, tmle = estimate_causal(estimators, Y, Qn, Qδn, Hn, Hshiftn)
 
     # Conservative EIF variance estimate
-    mach_consvar = machine(MTP.EIFConservative(), Y, Qn, gdf_source) |> fit!
-    consvar = MMI.transform(mach_consvar, Qδn, Hn)
-    onestep = merge(estimates[3], consvar)
-    tmle = merge(estimates[4], consvar)
+    #mach_consvar = machine(MTP.EIFConservative(), Y, Qn, gdf_source) |> fit!
+    #consvar = MMI.transform(mach_consvar, Qδn, Hn)
+    #onestep = merge(estimates[3], consvar)
+    #tmle = merge(estimates[4], consvar)
 
     # Bootstrap
     #=
@@ -77,20 +78,24 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
 
 end
 
-estimate_causal(estimators::Tuple, static_vars::AbstractNode, policy_vars::AbstractNode) = node((SV, P) -> estimate_causal(estimators, S, P), static_vars, policy_vars)
-function estimate_causal(estimators::Tuple, static_vars::NamedTuple, policy_vars::NamedTuple)
-    
-    mach_outcome_regression = machine(estimators[1]) |> fit!
-    mach_ipw = machine(estimators[2], static_vars.Y) |> fit!
-    mach_onestep = machine(estimators[3], static_vars.Y, static_vars.Qn) |> fit!
-    mach_tmle = machine(estimators[4], static_vars.Y, static_vars.Qn) |> fit!
+# Define custom functions akin to `predict` that yield the result of each estimation strategy from a learning network machine
+outcome_regression(machine, δnew) = MLJBase.unwrap(machine.fitresult).outcome_regression(δnew)
+ipw(machine, δnew) = MLJBase.unwrap(machine.fitresult).ipw(δnew)
+onestep(machine, δnew) = MLJBase.unwrap(machine.fitresult).onestep(δnew)
+tmle(machine, δnew) = MLJBase.unwrap(machine.fitresult).tmle(δnew)
 
-    outcome_regression = MMI.transform(mach_outcome_regression, static_vars.Qn)
-    ipw = MMI.transform(mach_ipw, policy_vars.Hn)
-    onestep = MMI.transform(mach_onestep, policy_vars.Qδn, policy_vars.Hn)
-    tmle = MMI.transform(mach_tmle, policy_vars.Qδn, policy_vars.Hn, policy_vars.Hshiftn)
+function estimate_causal(estimators::Tuple, Y, Qn, Qδn, Hn, Hshiftn)
+    mach_outcome_regression = machine(estimators[1])
+    mach_ipw = machine(estimators[2], Y) |> fit!
+    mach_onestep = machine(estimators[3], Y, Qn) |> fit!
+    mach_tmle = machine(estimators[4], Y, Qn) |> fit!
 
-    return [outcome_regression, ipw, onestep, tmle]
+    outcome_regression = MMI.transform(mach_outcome_regression, Qδn)
+    ipw = MMI.transform(mach_ipw, Hn)
+    onestep = MMI.transform(mach_onestep, Qδn, Hn)
+    tmle = MMI.transform(mach_tmle, Qδn, Hn, Hshiftn)
+
+    return outcome_regression, ipw, onestep, tmle
 end
 
 #=

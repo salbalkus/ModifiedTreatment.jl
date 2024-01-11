@@ -10,7 +10,7 @@ module ModifiedTreatment
     using CausalTables
 
 
-    import Base: merge
+    import Base: merge, getindex, iterate, prod
 
     const MMI = MLJModelInterface
 
@@ -23,9 +23,10 @@ module ModifiedTreatment
 
     include("causalestimators.jl")
     include("mtp.jl")
+    include("simulation/truth.jl")
 
     # interventions
-    export Intervention
+    export Intervention, IdentityIntervention
     export LinearShift, AdditiveShift, MultiplicativeShift
     export apply_intervention, apply_inverse_intervention 
     export differentiate_intervention, differentiate_inverse_intervention
@@ -36,6 +37,17 @@ module ModifiedTreatment
 
     # mtp
     export MTP, estimate_causal
+    export outcome_regression, ipw, onestep, tmle
+
+    # causalestimators
+    export estimate_outcome_regression, IPW, OneStep, TMLE
+
+    # simulation
+    export compute_true_MTP
+
+    # nodeutils
+    export gettreatment, getresponse, getgraph, getsummaries, summarize
+    export merge, getindex, iterate, length
 
     # general
     export prefit, fit, transform, inverse_transform, predict
