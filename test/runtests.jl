@@ -6,21 +6,21 @@ using MLJBase
 using MLJLinearModels
 using MLJModels
 using Graphs
-using Condensity 
+using Condensity
+
+# function for testing approximate equality of statistical estimators
+within(x, truth, ϵ) = abs(x - truth) < ϵ
 
 distseq = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
         :L1 => (; O...) -> DiscreteUniform(1, 5),
         :L1_s => NeighborSum(:L1),
-        :A => (; O...) -> (@. Normal(O[:L1] + 0.2 * O[:L1_s], 1)),
+        :A => (; O...) -> (@. Normal(O[:L1] + 0.1 * O[:L1_s], 0.5)),
         :A_s => NeighborSum(:A),
-        :Y => (; O...) -> (@. Normal(O[:A] + O[:A_s] + 0.2 * O[:L1], 1))
+        :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:A_s] + 0.2 * O[:L1] + 10, 1))
     ])
 
 dgp = DataGeneratingProcess(n -> erdos_renyi(n, 3/n), distseq; treatment = :A, response = :Y, controls = [:L1]);
 data = rand(dgp, 100)
-
-intervention = LinearShift(1.5, 0.5)
-compute_true_mtp(dgp, data, intervention)
 
 @testset "Intervention" begin
     int1 = AdditiveShift(0.5)
@@ -74,7 +74,21 @@ end
     @test dAδsinv.A == 1/1.5
 end
 
-#@testset "MTP"
+distseq = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
+        :L1 => (; O...) -> DiscreteUniform(1, 5),
+        :A => (; O...) -> (@. Normal(O[:L1], 1)),
+        :Y => (; O...) -> (@. Normal(O[:A] + 0.5 * O[:L1] + 10, 0.5))
+    ])
+
+dgp = DataGeneratingProcess(distseq, :A, :Y, [:L1]);
+data_large = rand(dgp, 10^6)
+
+intervention = LinearShift(1.1, 0.5)
+truth = compute_true_MTP(dgp, data_large, intervention)
+
+@testset "MTP IID" begin
+
+    moe = 0.1
 
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp))
@@ -82,13 +96,18 @@ end
     cv_splitter = nothing
 
     mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
-    mtpmach = machine(mtp, data) |> fit!
+    mtpmach = machine(mtp, data_large) |> fit!
+        
+    output_or = outcome_regression(mtpmach, intervention)
+    @test within(output_or.ψ, truth.ψ, moe)
     
-    δ = LinearShift(1.5, 0.5)
+    output_ipw = ipw(mtpmach, intervention)
+    @test within(output_ipw.ψ, truth.ψ, moe)
     
-    output_or = outcome_regression(mtpmach, δ)
-    output_ipw = ipw(mtpmach, δ)
-    output_onestep = onestep(mtpmach, δ)
-    output_tmle = tmle(mtpmach, δ)
+    output_onestep = onestep(mtpmach, intervention)
+    @test within(output_ipw.ψ, truth.ψ, moe)
 
-#end
+    output_tmle = tmle(mtpmach, intervention)
+    @test within(output_tmle.ψ, truth.ψ, moe)
+
+end
