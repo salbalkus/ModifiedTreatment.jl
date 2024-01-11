@@ -1,4 +1,7 @@
 
+# TODO: This function only works if the data are IID.
+# Need to implement efficiency bound for non-IID data.
+
 function compute_true_MTP(dgp, data, intervention)
     # Organize and transform the data
     Y = getresponse(data)

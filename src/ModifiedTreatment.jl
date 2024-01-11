@@ -1,25 +1,29 @@
 module ModifiedTreatment
 
     using MLJModelInterface
+    using MLJTuning
     using MLJBase
     using GLM
     using StatsBase
     using Graphs
     using Tables
     using TableOperations
+    using DataAPI
     using CausalTables
-
 
     import Base: merge, getindex, iterate, prod
 
     const MMI = MLJModelInterface
+    const MT = MLJTuning
 
     include("nodeutils.jl")
     include("utils.jl")
 
     include("interventions/intervention.jl")
     include("interventions/linearshift.jl")
-    include("interventionmodel.jl")
+    include("interventions/interventionmodel.jl")
+
+    include("crossfitting.jl")
 
     include("causalestimators.jl")
     include("mtp.jl")
@@ -35,15 +39,18 @@ module ModifiedTreatment
     # intervention model
     export InterventionModel
 
-    # mtp
-    export MTP, estimate_causal
-    export outcome_regression, ipw, onestep, tmle
+    # crossfitting
+    export CrossFitModel
 
     # causalestimators
     export estimate_outcome_regression, IPW, OneStep, TMLE
 
     # simulation
     export compute_true_MTP
+
+    # mtp
+    export MTP, estimate_causal
+    export outcome_regression, ipw, onestep, tmle
 
     # nodeutils
     export gettreatment, getresponse, getgraph, getsummaries, summarize
