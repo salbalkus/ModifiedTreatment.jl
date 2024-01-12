@@ -11,6 +11,8 @@ using Condensity
 using Tables
 using TableOperations
 
+using Random
+
 # function for testing approximate equality of statistical estimators
 within(x, truth, ϵ) = abs(x - truth) < ϵ
 
@@ -113,16 +115,25 @@ end
     
 end
 
+#@testset "resampling" begin
+
+
+#end
+
+
 
 @testset "MTP IID" begin
+    Random.seed!(1)
+    
+    data_large = rand(dgp_iid, 10^5)
 
     intervention = LinearShift(1.1, 0.5)
-    truth = compute_true_MTP(dgp, data_large, intervention)
+    truth = compute_true_MTP(dgp_iid, data_large, intervention)
 
     moe = 0.1
 
     mean_estimator = LinearRegressor()
-    density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp))
+    density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_iid))
     boot_sampler = nothing
     cv_splitter = nothing
 
@@ -131,7 +142,6 @@ end
         
     output_or = outcome_regression(mtpmach, intervention)
     @test within(output_or.ψ, truth.ψ, moe)
-    
     output_ipw = ipw(mtpmach, intervention)
     @test within(output_ipw.ψ, truth.ψ, moe)
     
@@ -140,5 +150,4 @@ end
 
     output_tmle = tmle(mtpmach, intervention)
     @test within(output_tmle.ψ, truth.ψ, moe)
-
 end

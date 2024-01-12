@@ -24,6 +24,7 @@ module ModifiedTreatment
     include("interventions/interventionmodel.jl")
 
     include("crossfitting.jl")
+    include("resampling.jl")
 
     include("causalestimators.jl")
     include("mtp.jl")
