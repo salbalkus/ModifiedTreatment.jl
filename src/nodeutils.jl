@@ -15,3 +15,4 @@ Base.iterate(nt::AbstractNode) = node(nt -> iterate(nt), nt)
 Base.prod(nt::AbstractNode) = node(nt -> prod(nt), nt)
 #Base.length(nt::AbstractNode) = node(nt -> length(nt), nt)
 
+

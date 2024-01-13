@@ -1,8 +1,8 @@
 
 eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
 
-mutable struct OutcomeRegressor <: MMI.Static end
-MMI.transform(::OutcomeRegressor, fitresult, Qδn) = (; ψ = mean(Qδn))
+outcome_regression_transform(Qδn::Node) = node(Qδn -> outcome_regression_transform(Qδn), Qδn)
+outcome_regression_transform(Qδn::Array) = (; ψ = mean(Qδn))
 
 abstract type CausalEstimator <: MMI.Unsupervised end
 

@@ -11,7 +11,7 @@ module ModifiedTreatment
     using DataAPI
     using CausalTables
 
-    import Base: merge, getindex, iterate, prod
+    import Base: merge, getindex, iterate, prod, zip, collect, reduce
 
     const MMI = MLJModelInterface
     const MT = MLJTuning
@@ -43,14 +43,18 @@ module ModifiedTreatment
     # crossfitting
     export CrossFitModel
 
+    # resampling
+    export ResampledModel, BootstrapSampler, BasicSampler, bootstrap_samples, bootstrap_sample
+
     # causalestimators
-    export estimate_outcome_regression, IPW, OneStep, TMLE
+    export estimate_outcome_regression, OutcomeRegressor, IPW, OneStep, TMLE
 
     # simulation
     export compute_true_MTP
 
     # mtp
-    export MTP, estimate_causal
+    export MTP, intervene_on_data, crossfit_nuisance_estimators, estimate_nuisances, estimate_causal_parameters, bootstrap_estimates
+    export resample_nuisances, resample_causal_parameters, lazy_iterate_predict, collect_bootstrapped_estimates
     export outcome_regression, ipw, onestep, tmle
 
     # nodeutils
