@@ -68,7 +68,8 @@ onestep(machine, δnew) = MLJBase.unwrap(machine.fitresult).onestep(δnew)
 tmle(machine, δnew) = MLJBase.unwrap(machine.fitresult).tmle(δnew)
 
 function intervene_on_data(model_intervention, Os, δ)
-    mach_intervention = machine(model_intervention, Os) |> fit!
+    # TODO: Bug here; this is retraining multiple times (during bootstrap?) which we don't want
+    mach_intervention = machine(model_intervention, Os)
 
     tmp1 = MMI.predict(mach_intervention, δ)
     tmp2 = MMI.transform(mach_intervention, δ)
@@ -118,9 +119,12 @@ function estimate_causal_parameters(estimators::Tuple, Y, Qn, Qδn, Hn, Hshiftn)
     return outcome_regression_est, ipw_est, onestep_est, tmle_est
 end
 
+# Bootstrap functions
+
 function bootstrap_estimates(mtp, estimators, mach_mean, mach_density, Os, δ)
     Os_b = bootstrap_samples(mtp.boot_sampler, Os)
     Y = node(Os_b -> Iterators.map(getresponse, Os_b), Os_b)
+
     model_intervention = ResampledModel(InterventionModel())
     LAs, _, _, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os_b, δ)
     Qn, Qδn, Hn, Hshiftn = resample_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
@@ -143,7 +147,7 @@ function resample_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs
 
     # Get Density Ratio
     Hn_noderiv = lazy_iterate_predict(mach_density, LAδsinv, LAs)
-    Hn = lazy_multiply_derivative(Hn_noderiv, dAδs)
+    Hn = lazy_multiply_derivative(Hn_noderiv, dAδsinv)
 
     Hshiftn_noderiv = lazy_iterate_predict(mach_density, LAs, LAδs)
     Hshiftn = lazy_multiply_derivative(Hshiftn_noderiv, dAδs)

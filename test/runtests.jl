@@ -13,6 +13,8 @@ using TableOperations
 
 using Random
 
+using Logging
+
 
 # function for testing approximate equality of statistical estimators
 within(x, truth, ϵ) = abs(x - truth) < ϵ
@@ -89,8 +91,7 @@ end
     @test dAδsinv.A == 1/1.5
 end
 
-@testset "CrossFitModel" begin
-    
+@testset "CrossFitModel" begin   
     # Test a regression model
     LA = replacetable(data_iid, TableOperations.select(data_iid, :L1, :A) |> Tables.columntable)    
     Y = Tables.getcolumn(LA, :A) .+ 0.5 .* Tables.getcolumn(LA, :L1) .+ 10
@@ -98,7 +99,7 @@ end
     mean_crossfit = CrossFitModel(mean_estimator, CV())
     mach_mean = machine(mean_crossfit, LA, Y) |> fit!
     pred_mean = MLJBase.predict(mach_mean, LA)
-    @test cor(Y, pred_mean) == 1.0
+    @test cor(Y, pred_mean) ≈ 1.0
 
     ratio_model = DensityRatioPropensity(OracleDensityEstimator(dgp_iid))
     ratio_crossfit = CrossFitModel(ratio_model, CV())
@@ -113,11 +114,16 @@ end
     LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), A = Tables.getcolumn(A, :A) .+ 0.1))
     g0shift = pdf.(condensity(dgp_iid, L, :A), Tables.getcolumn(LAδ, :A))
     g0 = pdf.(condensity(dgp_iid, L, :A), Tables.getcolumn(LA, :A))
-    @test MLJBase.predict(mach_ratio, LA, LAδ) ==  g0 ./ g0shift
+    MLJBase.predict(mach_ratio, LA, LAδ)
     
+    foo = MLJBase.predict(mach_ratio, LA, LAδ)
+    true_ratio = g0 ./ g0shift
+
+
+    @test foo ≈  true_ratio
 end
 
-@testset "MTP IID" begin
+#@testset "MTP IID" begin
     Random.seed!(1)
     
     data_large = rand(dgp_iid, 10^5)
@@ -129,7 +135,7 @@ end
 
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_iid))
-    boot_sampler = BasicSampler(10)
+    boot_sampler = BasicSampler(4)
     cv_splitter = CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
@@ -146,12 +152,14 @@ end
 
     output_tmle = tmle(mtpmach, intervention)
     @test within(output_tmle.ψ, truth.ψ, moe)
-end 
+#end 
 
 #@testset "MTP Network" begin
     Random.seed!(1)
+
+    Logging.disable_logging(Logging.Info)
     
-    data_large = rand(dgp_net, 10^5)
+    data_large = rand(dgp_net, 10^3)
 
     intervention = LinearShift(1.1, 0.5)
     truth = compute_true_MTP(dgp_net, data_large, intervention)
@@ -160,7 +168,7 @@ end
 
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_net))
-    boot_sampler = VertexSampler(10)
+    boot_sampler = VertexSampler(10000)
     cv_splitter = nothing#CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)

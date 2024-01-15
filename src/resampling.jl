@@ -8,9 +8,13 @@ function MMI.fit(rse::ResampledModel, verbosity, X...)
 
     # Here X should be a tuple of equal-length vectors
     # Each vector entry is one "sample" of the data for that particular parameter
-
+    println("Training ResampledModel")
     # Fit each sample
-    machines = Iterators.map(x -> fit!(machine(rse.model, x...)), zip(X...))
+    machines = [machine(rse.model, x...) for x in zip(X...)]
+    
+    for mach in machines
+        fit!(mach)
+    end
 
     fitresult = (; machines = machines)
     cache = nothing
@@ -45,7 +49,7 @@ bootstrap_samples(sampler::BootstrapSampler, O::CausalTable) = Iterators.map(i -
 mutable struct BasicSampler <: BootstrapSampler
     B::Int64
 end
-bootstrap_sample(sampler::BasicSampler, O::CausalTable) = Tables.subset(O, rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
+bootstrap_sample(sampler::BasicSampler, O::CausalTable) = Tables.subset(O, rand(1:DataAPI.nrow(O), DataAPI.nrow(O)); viewhint=true)
 
 ######
 
@@ -81,7 +85,7 @@ function cluster_index(O, s)
             g_new = blockdiag(g_new, gdf.graph[Ikeys_next])
         end
     end
-    tbl_new = Tables.subset(O.tbl, I_new)
+    tbl_new = Tables.subset(O.tbl, I_new; viewhint=true)
     return CausalTables.replace(O; tbl = tbl_new, graph = g_new)
 end
 
@@ -93,7 +97,7 @@ mutable struct VertexMooNSampler <: BootstrapSampler
 end
 function bootstrap_sample(sampler::VertexMooNSampler, O::CausalTable)
     s = sample(1:nv(gdf), Int(DataAPI.nrow(O) * sampler.frac), replace = false)
-    return CausalTables.replace(O; tbl = Tables.subset(O.tbl, s), graph = getgraph(O)[s])
+    return CausalTables.replace(O; tbl = Tables.subset(O.tbl, s; viewhint=true), graph = getgraph(O)[s])
 end
 
 mutable struct VertexSampler <: BootstrapSampler 
@@ -104,7 +108,7 @@ bootstrap_sample(sampler::VertexSampler, O::CausalTable) = vertex_index(O, rand(
 function vertex_index(O::CausalTable, samp::Vector{Int})
     # First, filter the table
     g = getgraph(O)
-    tbl_new = Tables.subset(gettable(O), rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
+    tbl_new = Tables.subset(gettable(O), rand(1:DataAPI.nrow(O), DataAPI.nrow(O)); viewhint=true)
 
     # Compute the graph density for adding random edges
     g_density = (ne(g) / nv(g)^2 )
