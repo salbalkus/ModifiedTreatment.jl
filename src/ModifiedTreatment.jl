@@ -10,6 +10,7 @@ module ModifiedTreatment
     using TableOperations
     using DataAPI
     using CausalTables
+    import LinearAlgebra: diagm, I
 
     import Base: merge, getindex, iterate, prod, zip, collect, reduce
 
@@ -44,7 +45,8 @@ module ModifiedTreatment
     export CrossFitModel
 
     # resampling
-    export ResampledModel, BootstrapSampler, BasicSampler, bootstrap_samples, bootstrap_sample
+    export ResampledModel, BootstrapSampler, BasicSampler, ClusterSampler, VertexMooNSampler, VertexSampler
+    export bootstrap_samples, bootstrap_sample
 
     # causalestimators
     export estimate_outcome_regression, OutcomeRegressor, IPW, OneStep, TMLE

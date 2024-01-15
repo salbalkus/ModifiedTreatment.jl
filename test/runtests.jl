@@ -38,7 +38,6 @@ dgp = DataGeneratingProcess(n -> erdos_renyi(n, 3/n), distseqnet;
                             treatment = :A, response = :Y, controls = [:L1]);
 data_net = rand(dgp, 100)
 
-
 @testset "Intervention" begin
     int1 = AdditiveShift(0.5)
     int2 = MultiplicativeShift(1.5)
@@ -132,7 +131,7 @@ end
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_iid))
     boot_sampler = BasicSampler(10)
-    cv_splitter = nothing
+    cv_splitter = CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
     mtpmach = machine(mtp, data_large) |> fit!
@@ -148,7 +147,7 @@ end
 
     output_tmle = tmle(mtpmach, intervention)
     @test within(output_tmle.ψ, truth.ψ, moe)
-end
+#end
 
 estimators = (IPW(), OneStep(), TMLE())
 δ = source(IdentityIntervention())
@@ -200,5 +199,4 @@ Os = source(O)
     
     first(foo)
     ipw_est = transform(mach_ipw, Hn)
-    ψ = [sum(h .* y) / sum(h) for (h, y) in zip(Hn(), Y())]
-    
+    ψ = [sum(h .* y) / sum(h) for (h, y) in zip(Hn(), Y())]    

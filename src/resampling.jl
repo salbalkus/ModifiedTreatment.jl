@@ -99,9 +99,9 @@ end
 mutable struct VertexSampler <: BootstrapSampler 
     B
 end
-bootstrap_sample(sampler::BasicSampler, O::CausalTable) = vertex_index(O, rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
+bootstrap_sample(sampler::VertexSampler, O::CausalTable) = vertex_index(O, rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
 
-function vertex_index(gdf::MetaGraph, samp::Vector{Int})
+function vertex_index(O::CausalTable, samp::Vector{Int})
     # First, filter the table
     g = getgraph(O)
     tbl_new = Tables.subset(gettable(O), rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
