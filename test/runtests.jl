@@ -34,9 +34,9 @@ distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
         :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:A_s] + 0.2 * O[:L1] + 10, 1))
     ])
 
-dgp = DataGeneratingProcess(n -> erdos_renyi(n, 3/n), distseqnet; 
+dgp_net = DataGeneratingProcess(n -> erdos_renyi(n, 3/n), distseqnet; 
                             treatment = :A, response = :Y, controls = [:L1]);
-data_net = rand(dgp, 100)
+data_net = rand(dgp_net, 100)
 
 @testset "Intervention" begin
     int1 = AdditiveShift(0.5)
@@ -117,8 +117,7 @@ end
     
 end
 
-
-#@testset "MTP IID" begin
+@testset "MTP IID" begin
     Random.seed!(1)
     
     data_large = rand(dgp_iid, 10^5)
@@ -143,60 +142,39 @@ end
     @test within(output_ipw.ψ, truth.ψ, moe)
     
     output_onestep = onestep(mtpmach, intervention)
-    @test within(output_ipw.ψ, truth.ψ, moe)
+    @test within(output_onestep.ψ, truth.ψ, moe)
 
     output_tmle = tmle(mtpmach, intervention)
     @test within(output_tmle.ψ, truth.ψ, moe)
-#end
+end 
 
-estimators = (IPW(), OneStep(), TMLE())
-δ = source(IdentityIntervention())
-O = data_iid
-Os = source(O)
-
-    Y = getresponse(Os)
-    model_intervention = InterventionModel()
-    LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
-    mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
-
-    Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
-    outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(estimators, Y, Qn, Qδn, Hn, Hshiftn)
-
-
-    # Conservative EIF variance estimate
-    #mach_consvar = machine(MTP.EIFConservative(), Y, Qn, gdf_source) |> fit!
-    #consvar = MMI.transform(mach_consvar, Qδn, Hn)
-    #onestep = merge(estimates[3], consvar)
-    #tmle = merge(estimates[4], consvar)
-
-    Os_b = bootstrap_samples(mtp.boot_sampler, Os)
-    Y = node(Os_b -> Iterators.map(getresponse, Os_b), Os_b)
-    model_intervention = ResampledModel(InterventionModel())
-    foo = Os_b()
-    mach_intervention = machine(model_intervention, foo) |> fit!
-    bar = δ()
-
-    tmp1 = predict(mach_intervention, δ)
-    tmp2 = transform(mach_intervention, δ)
-    tmp3 = inverse_transform(mach_intervention, δ)
-
-    LAs, Ls, As = tmp1[1], tmp1[2], tmp1[3]
-    LAδs, dAδs = tmp2[1], tmp2[2]
-    LAδsinv, dAδsinv = tmp3[1], tmp3[2]
+#@testset "MTP Network" begin
+    Random.seed!(1)
     
-    mach_mean = machine(mtp.mean_estimator, first(LAs), first(Y)) |> fit!
-    mach_density = machine(mtp.density_ratio_estimator, first(Ls), first(As)) |> fit!
+    data_large = rand(dgp_net, 10^5)
 
-    Qn, Qδn, Hn, Hshiftn = resample_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
-    mach_ipw = machine(ResampledModel(estimators[1]), Y) |> fit!
-    foo = transform(mach_ipw, Hn)
-    collect(foo())
-    mach = first(mach_ipw.fitresult.machines)
-    transform(mach, Hn)()
-    foo = Iterators.map(x -> transform(x...), zip(mach_ipw.fitresult.machines, Hn()))
-    collect(zip(mach_ipw.fitresult.machines, Hn()))
+    intervention = LinearShift(1.1, 0.5)
+    truth = compute_true_MTP(dgp_net, data_large, intervention)
+
+    moe = 0.1
+
+    mean_estimator = LinearRegressor()
+    density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_net))
+    boot_sampler = VertexSampler(10)
+    cv_splitter = nothing#CV(nfolds = 5)
+
+    mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
+    mtpmach = machine(mtp, data_large) |> fit!
     
+    output_or = outcome_regression(mtpmach, intervention)
+    @test within(output_or.ψ, truth.ψ, moe)
     
-    first(foo)
-    ipw_est = transform(mach_ipw, Hn)
-    ψ = [sum(h .* y) / sum(h) for (h, y) in zip(Hn(), Y())]    
+    output_ipw = ipw(mtpmach, intervention)
+    @test within(output_ipw.ψ, truth.ψ, moe)
+    
+    output_onestep = onestep(mtpmach, intervention)
+    @test within(output_onestep.ψ, truth.ψ, moe)
+
+    output_tmle = tmle(mtpmach, intervention)
+    @test within(output_tmle.ψ, truth.ψ, moe)
+end

@@ -29,13 +29,21 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
     #tmle = merge(estimates[4], consvar)
 
     if mtp.boot_sampler.B > 0
+        # Get bootstrapped samples of estimates
         outcome_regression_boot, ipw_boot, onestep_boot, tmle_boot = bootstrap_estimates(mtp, estimators, mach_mean, mach_density, Os, δ)
-    end
+        
+        # Append bootstrapped samples to final output
+        outcome_regression_final = merge(outcome_regression, outcome_regression_boot)
+        ipw_final = merge(ipw, ipw_boot)
+        onestep_final = merge(onestep, onestep_boot)
+        tmle_final = merge(tmle, tmle_boot)
 
-    outcome_regression_final = merge(outcome_regression, outcome_regression_boot)
-    ipw_final = merge(ipw, ipw_boot)
-    onestep_final = merge(onestep, onestep_boot)
-    tmle_final = merge(tmle, tmle_boot)
+    else
+        outcome_regression_final = outcome_regression
+        ipw_final = ipw
+        onestep_final = onestep
+        tmle_final = tmle
+    end
 
     return (; 
         outcome_regression = outcome_regression_final,

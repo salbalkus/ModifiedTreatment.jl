@@ -110,7 +110,7 @@ function vertex_index(O::CausalTable, samp::Vector{Int})
     g_density = (ne(g) / nv(g)^2 )
 
     # Construct a transformation of the adjacency matrix
-    S = sparse(I, nv(g), nv(g))[:, samp]
+    S = SparseArrays.sparse(I, nv(g), nv(g))[:, samp]
 
     # Perform Snijders-Borgatti sampling sans random edges between duplicates
     A = transpose(S) * adjacency_matrix(g) * S

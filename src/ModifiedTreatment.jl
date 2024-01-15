@@ -11,6 +11,7 @@ module ModifiedTreatment
     using DataAPI
     using CausalTables
     import LinearAlgebra: diagm, I
+    using SparseArrays
 
     import Base: merge, getindex, iterate, prod, zip, collect, reduce
 
