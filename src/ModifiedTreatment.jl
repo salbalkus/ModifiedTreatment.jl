@@ -10,7 +10,9 @@ module ModifiedTreatment
     using TableOperations
     using DataAPI
     using CausalTables
+
     import LinearAlgebra: diagm, I
+    import Combinatorics: combinations
     using SparseArrays
 
     import Base: merge, getindex, iterate, prod, zip, collect, reduce
