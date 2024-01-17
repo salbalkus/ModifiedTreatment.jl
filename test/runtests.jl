@@ -8,6 +8,7 @@ using MLJModels
 using Graphs
 using Condensity
 
+
 using Tables
 using TableOperations
 
@@ -19,11 +20,11 @@ using Logging
 # function for testing approximate equality of statistical estimators
 within(x, truth, ϵ) = abs(x - truth) < ϵ
 
-distseqiid = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
+distseqiid = [
     :L1 => (; O...) -> DiscreteUniform(1, 5),
     :A => (; O...) -> (@. Normal(O[:L1], 1)),
     :Y => (; O...) -> (@. Normal(O[:A] + 0.5 * O[:L1] + 10, 0.5))
-])
+]
 dgp_iid = DataGeneratingProcess(distseqiid, :A, :Y, [:L1]);
 data_iid = rand(dgp_iid, 100)
 
@@ -33,7 +34,7 @@ distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
         :L1_s => NeighborSum(:L1),
         :A => (; O...) -> (@. Normal(O[:L1] + 0.1 * O[:L1_s], 0.5)),
         :A_s => NeighborSum(:A),
-        :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:A_s] + 0.2 * O[:L1] + 10, 1))
+        :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:A_s] + 0.1 * O[:L1] + 10, 1))
     ])
 
 dgp_net = DataGeneratingProcess(n -> erdos_renyi(n, 3/n), distseqnet; 
@@ -45,30 +46,35 @@ data_net = rand(dgp_net, 100)
     int2 = MultiplicativeShift(1.5)
     int3 = LinearShift(1.5, 0.5)
 
+    inv_int1 = inverse(int1)
+    inv_int2 = inverse(int2)
+    inv_int3 = inverse(int3)
+
     L = CausalTables.getcontrols(data_net)
     A = CausalTables.gettreatment(data_net)
 
-    @test apply_intervention(int1, A, L) == A .+ 0.5
-    @test apply_inverse_intervention(int1, A, L) == A .- 0.5
-    @test differentiate_intervention(int1, A, L) == 1
-    @test differentiate_inverse_intervention(int1, A, L) == 1
+    @test apply_intervention(int1, A, L) ≈ A .+ 0.5
+    @test apply_intervention(inv_int1, A, L) ≈ A .- 0.5
+    @test differentiate_intervention(int1, A, L) ≈ 1
+    @test differentiate_intervention(inv_int1, A, L) ≈ 1
+    
+    @test apply_intervention(int2, A, L) ≈ A .* 1.5
+    @test apply_intervention(inv_int2, A, L) ≈ A ./ 1.5
+    @test differentiate_intervention(int2, A, L) ≈ 1.5
+    @test differentiate_intervention(inverse(int2), A, L) ≈ 1/1.5
 
-    @test apply_intervention(int2, A, L) == A .* 1.5
-    @test apply_inverse_intervention(int2, A, L) == A ./ 1.5
-    @test differentiate_intervention(int2, A, L) == 1.5
-    @test differentiate_inverse_intervention(int2, A, L) == 1/1.5
-
-    @test apply_intervention(int3, A, L) == A .* 1.5 .+ 0.5
-    @test apply_inverse_intervention(int3, A, L) == (A .- 0.5) ./ 1.5
-    @test differentiate_intervention(int3, A, L) == 1.5
-    @test differentiate_inverse_intervention(int3, A, L) == 1/1.5
+    @test apply_intervention(int3, A, L) ≈ A .* 1.5 .+ 0.5
+    @test apply_intervention(inv_int3, A, L) ≈ (A .- 0.5) ./ 1.5
+    @test differentiate_intervention(int3, A, L) ≈ 1.5
+    @test differentiate_intervention(inv_int3, A, L) ≈ 1/1.5
 
     inducedint = get_induced_intervention(int3, NeighborSum(:A))
+    inv_inducedint = inverse(inducedint)
 
-    @test apply_intervention(inducedint, A, L) == A .* 1.5 .+ adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* 0.5)
-    @test apply_inverse_intervention(inducedint, A, L) == (A .- adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* 0.5)) ./ 1.5
-    @test all(differentiate_intervention(inducedint, A, L) .== 1.5)
-    @test all(differentiate_inverse_intervention(inducedint, A, L) .== 1/1.5)
+    @test apply_intervention(inducedint, A, L) ≈ A .* 1.5 .+ adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* 0.5)
+    @test apply_intervention(inv_inducedint, A, L) ≈ (A .- adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* 0.5)) ./ 1.5
+    @test all(differentiate_intervention(inducedint, A, L) .≈ 1.5)
+    @test all(differentiate_intervention(inv_inducedint, A, L) .≈ 1/1.5)
 end
 
 @testset "InterventionModel" begin
@@ -119,11 +125,10 @@ end
     foo = MLJBase.predict(mach_ratio, LA, LAδ)
     true_ratio = g0 ./ g0shift
 
-
-    @test foo ≈  true_ratio
+    @test foo ≈ true_ratio
 end
 
-#@testset "MTP IID" begin
+@testset "MTP IID" begin
     Random.seed!(1)
     
     data_large = rand(dgp_iid, 10^5)
@@ -135,11 +140,11 @@ end
 
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_iid))
-    boot_sampler = BasicSampler(4)
-    cv_splitter = CV(nfolds = 5)
+    boot_sampler = BasicSampler()
+    cv_splitter = nothing#CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
-    mtpmach = machine(mtp, data_large) |> fit!
+    mtpmach = machine(mtp, data_large, intervention) |> fit!
     
     output_or = outcome_regression(mtpmach, intervention)
     @test within(output_or.ψ, truth.ψ, moe)
@@ -152,28 +157,32 @@ end
 
     output_tmle = tmle(mtpmach, intervention)
     @test within(output_tmle.ψ, truth.ψ, moe)
-#end 
+    
+    # TODO: Add better tests to ensure the bootstrap is working correctly
+    B = 5
+    boot = ModifiedTreatment.bootstrap(mtpmach, intervention, B)
+    @test length(boot) == B
+end 
 
-#@testset "MTP Network" begin
+
+@testset "MTP Network" begin
     Random.seed!(1)
-
-    Logging.disable_logging(Logging.Info)
     
     data_large = rand(dgp_net, 10^3)
 
-    intervention = LinearShift(1.1, 0.5)
+    intervention = LinearShift(1.01, 0.1)
     truth = compute_true_MTP(dgp_net, data_large, intervention)
 
     moe = 0.1
 
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_net))
-    boot_sampler = VertexSampler(10000)
+    boot_sampler = VertexSampler()
     cv_splitter = nothing#CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
-    mtpmach = machine(mtp, data_large) |> fit!
-    
+    mtpmach = machine(mtp, data_large, intervention) |> fit!
+
     output_or = outcome_regression(mtpmach, intervention)
     @test within(output_or.ψ, truth.ψ, moe)
     
@@ -185,4 +194,8 @@ end
 
     output_tmle = tmle(mtpmach, intervention)
     @test within(output_tmle.ψ, truth.ψ, moe)
+
+    B = 5
+    boot = ModifiedTreatment.bootstrap(mtpmach, intervention, B)
+    @test length(boot) == B
 end

@@ -32,14 +32,13 @@ module ModifiedTreatment
 
     include("causalestimators.jl")
     include("mtp.jl")
+    include("bootstrap.jl")
     include("simulation/truth.jl")
 
     # interventions
     export Intervention, IdentityIntervention
     export LinearShift, AdditiveShift, MultiplicativeShift
-    export apply_intervention, apply_inverse_intervention 
-    export differentiate_intervention, differentiate_inverse_intervention
-    export get_induced_intervention
+    export apply_intervention, inverse, differentiate_intervention, get_induced_intervention
 
     # intervention model
     export InterventionModel
@@ -49,7 +48,7 @@ module ModifiedTreatment
 
     # resampling
     export ResampledModel, BootstrapSampler, BasicSampler, ClusterSampler, VertexMooNSampler, VertexSampler
-    export bootstrap_samples, bootstrap_sample
+    export bootstrap
 
     # causalestimators
     export estimate_outcome_regression, OutcomeRegressor, IPW, OneStep, TMLE
@@ -60,7 +59,7 @@ module ModifiedTreatment
     # mtp
     export MTP, intervene_on_data, crossfit_nuisance_estimators, estimate_nuisances, estimate_causal_parameters, bootstrap_estimates
     export resample_nuisances, resample_causal_parameters, lazy_iterate_predict, collect_bootstrapped_estimates
-    export outcome_regression, ipw, onestep, tmle
+    export outcome_regression, ipw, onestep, tmle, nuisance_machines
 
     # nodeutils
     export gettreatment, getresponse, getgraph, getsummaries, summarize

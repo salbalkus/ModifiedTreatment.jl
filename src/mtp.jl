@@ -8,9 +8,9 @@ end
 
 MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter) = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter, 0.95)
 
-function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
+function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     estimators = (IPW(), OneStep(), TMLE())
-    δ = source(IdentityIntervention())
+    δ = source(Δ)
     Os = source(O)
 
     Y = getresponse(Os)
@@ -19,7 +19,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
 
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
-    outcome_regression, ipw, onestep, tmle = estimate_causal_parameters(estimators, Y, Qn, Qδn, Hn, Hshiftn)
+    outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(estimators, Y, Qn, Qδn, Hn, Hshiftn)
 
     # Conservative EIF variance estimate
     #mach_consvar = machine(MTP.EIFConservative(), Y, Qn, gdf_source) |> fit!
@@ -28,17 +28,25 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
     #tmle = merge(estimates[4], consvar)
 
     return (; 
-        outcome_regression = outcome_regression_final,
-        ipw = ipw_final,
-        onestep = onestep_final,
-        tmle = tmle_final,
+        outcome_regression = outcome_regression_est,
+        ipw = ipw_est,
+        onestep = onestep_est,
+        tmle = tmle_est,
         report = (; 
+            LAs = LAs,
+            LAδs = LAδs,
+            LAδsinv = LAδsinv,
+            dAδs = dAδs,
+            dAδsinv = dAδsinv,
             Qn = Qn,
             Qδn = Qδn,
             Hn = Hn,
             Hshiftn = Hshiftn,
         ),
-        #fitted_params = params
+        nuisance_machines = (;
+            machine_mean = mach_mean,
+            machine_density = mach_density,
+        )
     )    
 
 end
@@ -49,8 +57,10 @@ ipw(machine, δnew) = MLJBase.unwrap(machine.fitresult).ipw(δnew)
 onestep(machine, δnew) = MLJBase.unwrap(machine.fitresult).onestep(δnew)
 tmle(machine, δnew) = MLJBase.unwrap(machine.fitresult).tmle(δnew)
 
+# Define custom function to extract the nuisance estimators from the learning network machine
+nuisance_machines(machine::Machine{MTP}) = MLJBase.unwrap(machine.fitresult).nuisance_machines
+
 function intervene_on_data(model_intervention, Os, δ)
-    # TODO: Bug here; this is retraining multiple times (during bootstrap?) which we don't want
     mach_intervention = machine(model_intervention, Os)
 
     tmp1 = MMI.predict(mach_intervention, δ)

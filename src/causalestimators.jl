@@ -7,7 +7,7 @@ outcome_regression_transform(Qδn::Array) = (; ψ = mean(Qδn))
 # define basic estimators
 function ipw(Y::Array, Hn::Array)
     ψ = sum(Hn .* Y) / sum(Hn)
-    σ2 = var(Hn .* (fitresult.Y .- ψ)) / length(Hn)
+    σ2 = var(Hn .* (Y .- ψ)) / length(Hn)
     return (; ψ = ψ, σ2 = σ2)
 end
 
@@ -23,10 +23,10 @@ function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array)
     Y01 = StatsBase.transform(scaler, Y)
     Qn01 = StatsBase.transform(scaler, Qn)
     bound!(Qn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
-    return tmle_fromscaled(Y, Y01, Qn01, Qδn, Hn, Hshiftn, scaler)
+    return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, scaler)
 end
 
-function tmle_fromscaled(Y::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, scaler)
+function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, scaler)
     fit_data = MLJBase.table(hcat(Y01, Hn), names = ["Y", "Hn"])
     # Fit the logistic regression model
     # The 0 + is needed to fit the model with an intercept of 0
@@ -37,7 +37,7 @@ function tmle_fromscaled(Y::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Arr
     bound!(Qδn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
     predict_data = MLJBase.table(reshape(Hshiftn, length(Hshiftn), 1), names = ["Hn"])
     Qstar01 = GLM.predict(fluct_model, predict_data, offset = qlogis.(Qδn01))
-    Qstar = StatsBase.reconstruct(fitresult.scaler, identity.(Qstar01)) # `identity`` strips the vector of the "Missing" type
+    Qstar = StatsBase.reconstruct(scaler, identity.(Qstar01)) # `identity`` strips the vector of the "Missing" type
     ψ = mean(Qstar)
 
     # Estimate variance
@@ -69,7 +69,7 @@ function MMI.fit(::TMLE, verbosity, Y, Qn)
     (fitresult = (; Y = Y, Qn = Qn, Y01 = Y01, Qn01 = Qn01, scaler = scaler), cache = nothing, report = nothing)
 end
 
-MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn) = tmle_fromscaled(fitresult.Y, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.scaler)
+MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn) = tmle_fromscaled(fitresult.Y, fitresult.Qn, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.scaler)
 
 mutable struct EIFConservative <: MMI.Unsupervised end
 

@@ -1,7 +1,14 @@
 bootstrap(sampler::BootstrapSampler, mach_Qn, mach_Hn, O::CausalTable, δ::Intervention, B::Int64) = [bootstrap_sample(sampler, mach_Qn, mach_Hn, O, δ) for b in 1:B]
 
-function bootstrap(sampler::BootstrapSampler, mach_Qn, mach_Hn, O::CausalTable, δ::Intervention)
+function bootstrap(mtpmach::Machine{MTP}, δ::Intervention, B::Int64)
+    mach_Qn, mach_Hn = nuisance_machines(mtpmach)
+    O = mtpmach.args[1]()
+    return bootstrap(mtpmach.model.boot_sampler, mach_Qn, mach_Hn, O, δ, B)
+end
+
+function bootstrap_sample(sampler::BootstrapSampler, mach_Qn, mach_Hn, O::CausalTable, δ::Intervention)
     O_sample = bootstrap(sampler, O)
+    Y = getresponse(O_sample)
     LAs, LAδ, dAδ, LAδinv, dAδinv = get_summarized_intervened_data(mach_Qn, mach_Hn, O_sample, δ)
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_Qn, mach_Hn, LAs, LAδ, LAδinv, dAδ, dAδinv)
 
@@ -15,17 +22,17 @@ end
 function get_summarized_intervened_data(mach_Qn, mach_Hn, O::CausalTable, δ::Intervention)
 
     # Apply summary function
-    LAs = CausalTables.replacetable(O, TableOperations.select(CausalTables.summarize(O), setdiff(keys(gettable(O)), (getresponsevar(O),))...) |> Tables.columntable)
+    LAs = CausalTables.replacetable(O, TableOperations.select(CausalTables.summarize(O), setdiff(keys(gettable(O)), (getresponsesymbol(O),))...) |> Tables.columntable)
 
     # Figure out which treatments are summarized and which are purely natural
-    treatmentvar = gettreatmentvar(LAs)
+    treatmentvar = gettreatmentsymbol(LAs)
     summaries = getsummaries(LAs)
     summaryvars = [CausalTables.get_var_to_summarize(s) for s in summaries]
     summarytreatment = keys(summaries)[summaryvars .== treatmentvar]
 
     # Split the data
     A = gettreatment(LAs)
-    Ltbl = TableOperations.select(LAs, vcat(getcontrolvars(LAs), keys(summaries)[summaryvars .!= LAs.treatment]...)...) |> Tables.columntable
+    Ltbl = TableOperations.select(LAs, vcat(getcontrolssymbols(LAs), keys(summaries)[summaryvars .!= LAs.treatment]...)...) |> Tables.columntable
     Ls = CausalTables.replacetable(LAs, Ltbl)
 
     LAδ, dAδ = get_intervened_data(LAs, A, Ls, δ, summarytreatment, summaries, treatmentvar)
@@ -53,6 +60,6 @@ function get_intervened_data(LAs, A, Ls, Δ::Intervention, summarytreatment, sum
     t = (treatmentvar,)
     Aderivatives = merge(NamedTuple{t}((Aδd,)), NamedTuple(Aδsd))
     Aδinterventions = merge(NamedTuple{t}((Aδ,)), NamedTuple(Aδs))
-    LAδinterventions = CausalTables.replacetable(Ls, merge(Ls, Aδinterventions))
+    LAδinterventions = CausalTables.replacetable(Ls, merge(gettable(Ls), Aδinterventions))
     return LAδinterventions, Aderivatives   
 end
