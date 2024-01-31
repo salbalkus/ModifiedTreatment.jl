@@ -48,23 +48,5 @@ function MMI.transform(m::InterventionModel, fitresult, Δ::Intervention)
     return LAδinterventions, Aderivatives
 end
 
-function MMI.inverse_transform(m::InterventionModel, fitresult, Δ::Intervention)
-    Aδ = apply_inverse_intervention(Δ, fitresult.A, fitresult.Ls)
-    Aδd = differentiate_inverse_intervention(Δ, fitresult.A, fitresult.Ls)
+MMI.inverse_transform(m::InterventionModel, fitresult, Δ::Intervention) = MMI.transform(m, fitresult, inverse(Δ))
 
-    Aδs = Vector{Pair}(undef, length(fitresult.summarytreatment))
-    Aδsd = Vector{Pair}(undef, length(fitresult.summarytreatment))
-
-    for (i, st) in enumerate(fitresult.summarytreatment)
-        Δsummary = get_induced_intervention(Δ, fitresult.LAs.summaries[st])
-        As = Tables.getcolumn(fitresult.LAs, st)
-        Aδs[i] = st => apply_inverse_intervention(Δsummary, As, fitresult.Ls)
-        Aδsd[i] = st => differentiate_inverse_intervention(Δsummary, As, fitresult.Ls)
-    end
-
-    t = (fitresult.LAs.treatment,)
-    Aderivatives = merge(NamedTuple{t}((Aδd,)), NamedTuple(Aδsd))
-    Aδinterventions = merge(NamedTuple{t}((Aδ,)), NamedTuple(Aδs))
-    LAδinterventions = CausalTables.replacetable(fitresult.Ls, merge(fitresult.Ls.tbl, Aδinterventions))
-    return LAδinterventions, Aderivatives
-end

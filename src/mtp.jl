@@ -8,9 +8,9 @@ end
 
 MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter) = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter, 0.95)
 
-function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
+function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     estimators = (IPW(), OneStep(), TMLE())
-    δ = source(IdentityIntervention())
+    δ = source(Δ)
     Os = source(O)
 
     Y = getresponse(Os)
@@ -19,8 +19,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
 
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
-    outcome_regression, ipw, onestep, tmle = estimate_causal_parameters(estimators, Y, Qn, Qδn, Hn, Hshiftn)
-
+    outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(estimators, Y, Qn, Qδn, Hn, Hshiftn)
 
     # Conservative EIF variance estimate
     #mach_consvar = machine(MTP.EIFConservative(), Y, Qn, gdf_source) |> fit!
@@ -28,35 +27,26 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable)
     #onestep = merge(estimates[3], consvar)
     #tmle = merge(estimates[4], consvar)
 
-    if mtp.boot_sampler.B > 0
-        # Get bootstrapped samples of estimates
-        outcome_regression_boot, ipw_boot, onestep_boot, tmle_boot = bootstrap_estimates(mtp, estimators, mach_mean, mach_density, Os, δ)
-        
-        # Append bootstrapped samples to final output
-        outcome_regression_final = merge(outcome_regression, outcome_regression_boot)
-        ipw_final = merge(ipw, ipw_boot)
-        onestep_final = merge(onestep, onestep_boot)
-        tmle_final = merge(tmle, tmle_boot)
-
-    else
-        outcome_regression_final = outcome_regression
-        ipw_final = ipw
-        onestep_final = onestep
-        tmle_final = tmle
-    end
-
     return (; 
-        outcome_regression = outcome_regression_final,
-        ipw = ipw_final,
-        onestep = onestep_final,
-        tmle = tmle_final,
+        outcome_regression = outcome_regression_est,
+        ipw = ipw_est,
+        onestep = onestep_est,
+        tmle = tmle_est,
         report = (; 
+            LAs = LAs,
+            LAδs = LAδs,
+            LAδsinv = LAδsinv,
+            dAδs = dAδs,
+            dAδsinv = dAδsinv,
             Qn = Qn,
             Qδn = Qδn,
             Hn = Hn,
             Hshiftn = Hshiftn,
         ),
-        #fitted_params = params
+        nuisance_machines = (;
+            machine_mean = mach_mean,
+            machine_density = mach_density,
+        )
     )    
 
 end
@@ -67,8 +57,10 @@ ipw(machine, δnew) = MLJBase.unwrap(machine.fitresult).ipw(δnew)
 onestep(machine, δnew) = MLJBase.unwrap(machine.fitresult).onestep(δnew)
 tmle(machine, δnew) = MLJBase.unwrap(machine.fitresult).tmle(δnew)
 
+# Define custom function to extract the nuisance estimators from the learning network machine
+nuisance_machines(machine::Machine{MTP}) = MLJBase.unwrap(machine.fitresult).nuisance_machines
+
 function intervene_on_data(model_intervention, Os, δ)
-    # TODO: Bug here; this is retraining multiple times (during bootstrap?) which we don't want
     mach_intervention = machine(model_intervention, Os)
 
     tmp1 = MMI.predict(mach_intervention, δ)
@@ -118,58 +110,4 @@ function estimate_causal_parameters(estimators::Tuple, Y, Qn, Qδn, Hn, Hshiftn)
 
     return outcome_regression_est, ipw_est, onestep_est, tmle_est
 end
-
-# Bootstrap functions
-
-function bootstrap_estimates(mtp, estimators, mach_mean, mach_density, Os, δ)
-    Os_b = bootstrap_samples(mtp.boot_sampler, Os)
-    Y = node(Os_b -> Iterators.map(getresponse, Os_b), Os_b)
-
-    model_intervention = ResampledModel(InterventionModel())
-    LAs, _, _, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os_b, δ)
-    Qn, Qδn, Hn, Hshiftn = resample_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
-    
-    outcome_regression, ipw, onestep, tmle = resample_causal_parameters(estimators, Y, Qn, Qδn, Hn, Hshiftn)
-
-    return collect_bootstrapped_estimates(outcome_regression), collect_bootstrapped_estimates(ipw), collect_bootstrapped_estimates(onestep), collect_bootstrapped_estimates(tmle)
-end
-
-#lazy_iterate_predict(mach, X::Node...) = node(X -> Iterators.map(x -> MMI.predict(mach, x...), zip(X...)), X)
-lazy_iterate_predict(mach, X::Node) = node(X -> Iterators.map(x -> MMI.predict(mach, x), X), X)
-lazy_iterate_predict(mach, X1::Node, X2::Node) = node((X1, X2) -> Iterators.map(x -> MMI.predict(mach, x...), zip(X1, X2)), X1, X2)
-lazy_multiply_derivative(X::Node, dX::Node) = node((X, dX) -> Iterators.map((x, dx) -> x * prod(dx), X, dX), X, dX)
-
-
-function resample_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
-    # Get Conditional Mean
-    Qn = lazy_iterate_predict(mach_mean, LAs)
-    Qδn = lazy_iterate_predict(mach_mean, LAδs)
-
-    # Get Density Ratio
-    Hn_noderiv = lazy_iterate_predict(mach_density, LAδsinv, LAs)
-    Hn = lazy_multiply_derivative(Hn_noderiv, dAδsinv)
-
-    Hshiftn_noderiv = lazy_iterate_predict(mach_density, LAs, LAδs)
-    Hshiftn = lazy_multiply_derivative(Hshiftn_noderiv, dAδs)
-
-    return Qn, Qδn, Hn, Hshiftn
-end
-
-function resample_causal_parameters(estimators::Tuple, Y, Qn, Qδn, Hn, Hshiftn)
-    
-    outcome_regression = node(Qδn -> map(outcome_regression_transform, Qδn), Qδn)
-    
-    mach_ipw = machine(ResampledModel(estimators[1]), Y) |> fit!
-    mach_onestep = machine(ResampledModel(estimators[2]), Y, Qn) |> fit!
-    mach_tmle = machine(ResampledModel(estimators[3]), Y, Qn) |> fit!
-
-    ipw = MMI.transform(mach_ipw, Hn)
-    onestep = MMI.transform(mach_onestep, Qδn, Hn)
-    tmle = MMI.transform(mach_tmle, Qδn, Hn, Hshiftn)
-
-    return outcome_regression, ipw, onestep, tmle
-end
-
-collect_bootstrapped_estimates(estimates::AbstractNode) = node(collect_bootstrapped_estimates, estimates)
-collect_bootstrapped_estimates(estimates) = (boot = [e.ψ for e in estimates],)
 
