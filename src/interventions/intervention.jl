@@ -13,7 +13,7 @@ mutable struct IdentityIntervention <: Intervention end
 apply_intervention(intervention::IdentityIntervention, A, L) =  A
 differentiate_intervention(intervention::IdentityIntervention, A, L) = 1
 inverse(intervention::IdentityIntervention) = IdentityIntervention()
-get_induced_intervention(intervention::IdentityIntervention, summary::NeighborSum) = IdentityIntervention()
+get_induced_intervention(intervention::IdentityIntervention, summary::Sum) = IdentityIntervention()
 
 
 

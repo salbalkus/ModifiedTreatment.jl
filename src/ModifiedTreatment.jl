@@ -33,7 +33,7 @@ module ModifiedTreatment
     include("causalestimators.jl")
     include("mtp.jl")
     include("bootstrap.jl")
-    include("simulation/truth.jl")
+    include("truth.jl")
 
     # interventions
     export Intervention, IdentityIntervention

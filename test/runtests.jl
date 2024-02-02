@@ -8,7 +8,6 @@ using MLJModels
 using Graphs
 using Condensity
 
-
 using Tables
 using TableOperations
 
@@ -25,26 +24,28 @@ distseqiid = [
     :A => (; O...) -> (@. Normal(O[:L1], 1)),
     :Y => (; O...) -> (@. Normal(O[:A] + 0.5 * O[:L1] + 10, 0.5))
 ]
-dgp_iid = DataGeneratingProcess(distseqiid, :A, :Y, [:L1]);
+dgp_iid = DataGeneratingProcess(distseqiid; treatment = :A, response = :Y, controls = [:L1]);
 data_iid = rand(dgp_iid, 100)
-
 
 distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
         :L1 => (; O...) -> DiscreteUniform(1, 5),
-        :L1_s => NeighborSum(:L1),
-        :A => (; O...) -> (@. Normal(O[:L1] + 0.1 * O[:L1_s], 0.5)),
-        :A_s => NeighborSum(:A),
-        :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:A_s] + 0.1 * O[:L1] + 10, 1))
+        :L1_s => Sum(:L1),
+        :A => (; O...) -> (@. Normal(O[:L1], 0.5)),
+        :A_s => Sum(:A, include_self = false),
+        :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:L1_s] + 0.1 * O[:L1] + 10, 1))
     ])
 
-dgp_net = DataGeneratingProcess(n -> erdos_renyi(n, 3/n), distseqnet; 
-                            treatment = :A, response = :Y, controls = [:L1]);
+dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, 4), distseqnet; 
+                            treatment = :A_s, response = :Y, controls = [:L1, :L1_s, :A]);
 data_net = rand(dgp_net, 100)
 
+
 @testset "Intervention" begin
-    int1 = AdditiveShift(0.5)
-    int2 = MultiplicativeShift(1.5)
-    int3 = LinearShift(1.5, 0.5)
+    m = 1.5
+    a = 0.5
+    int1 = AdditiveShift(a)
+    int2 = MultiplicativeShift(m)
+    int3 = LinearShift(m, a)
 
     inv_int1 = inverse(int1)
     inv_int2 = inverse(int2)
@@ -68,11 +69,14 @@ data_net = rand(dgp_net, 100)
     @test differentiate_intervention(int3, A, L) ≈ 1.5
     @test differentiate_intervention(inv_int3, A, L) ≈ 1/1.5
 
-    inducedint = get_induced_intervention(int3, NeighborSum(:A))
+    inducedint = get_induced_intervention(int3, Sum(:A, include_self = false))
     inv_inducedint = inverse(inducedint)
+    
+    A .* m .+ adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* a)
+    apply_intervention(inducedint, A, L)
 
-    @test apply_intervention(inducedint, A, L) ≈ A .* 1.5 .+ adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* 0.5)
-    @test apply_intervention(inv_inducedint, A, L) ≈ (A .- adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* 0.5)) ./ 1.5
+    @test apply_intervention(inducedint, A, L) ≈ A .* m .+ adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* a)
+    @test apply_intervention(inv_inducedint, A, L) ≈ (A .- adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* a)) ./ m
     @test all(differentiate_intervention(inducedint, A, L) .≈ 1.5)
     @test all(differentiate_intervention(inv_inducedint, A, L) .≈ 1/1.5)
 end
@@ -80,21 +84,20 @@ end
 @testset "InterventionModel" begin
     intervention = LinearShift(1.5, 0.5)
     intmach = machine(InterventionModel(), data_net) |> fit!
-    LAs, Ls, As = predict(intmach, intervention)  
+    LAs, Ls, As = predict(intmach, intervention) 
+    @test Ls.tbl == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, A = data_net.tbl.A)
+    @test As == (A_s = data_net.tbl.A_s,)
 
-    @test Ls.tbl == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s)
-    @test As == (A_s = data_net.tbl.A_s, A = data_net.tbl.A)
+    As
     @test LAs.tbl == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, A = data_net.tbl.A, A_s = data_net.tbl.A_s)
 
     LAδs, dAδs = transform(intmach, intervention)
-    @test LAδs.tbl.A ≈ data_net.tbl.A .* 1.5 .+ 0.5
     @test LAδs.tbl.A_s ≈ adjacency_matrix(data_net.graph) * ((data_net.tbl.A .* 1.5) .+ 0.5)
-    @test dAδs.A == 1.5
+    @test dAδs.A_s == 1.5
 
     LAδsinv, dAδsinv = inverse_transform(intmach, intervention)
-    @test LAδsinv.tbl.A ≈ (data_net.tbl.A .- 0.5) ./ 1.5
     @test LAδsinv.tbl.A_s ≈ adjacency_matrix(data_net.graph) * ((data_net.tbl.A .- 0.5) ./ 1.5)
-    @test dAδsinv.A == 1/1.5
+    @test dAδsinv.A_s == 1/1.5
 end
 
 @testset "CrossFitModel" begin   
@@ -129,6 +132,7 @@ end
 end
 
 @testset "MTP IID" begin
+  
     Random.seed!(1)
     
     data_large = rand(dgp_iid, 10^5)
@@ -168,13 +172,12 @@ end
 @testset "MTP Network" begin
     Random.seed!(1)
     
-    data_large = rand(dgp_net, 10^3)
+    data_vlarge = rand(dgp_net, 10^6)
+    data_large = rand(dgp_net, 10^4)
 
     intervention = LinearShift(1.01, 0.1)
+    
     truth = compute_true_MTP(dgp_net, data_large, intervention)
-
-    moe = 0.1
-
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_net))
     boot_sampler = VertexSampler()
@@ -195,7 +198,7 @@ end
     output_tmle = tmle(mtpmach, intervention)
     @test within(output_tmle.ψ, truth.ψ, moe)
 
-    B = 5
+    B = 10
     boot = ModifiedTreatment.bootstrap(mtpmach, intervention, B)
     @test length(boot) == B
 end

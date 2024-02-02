@@ -2,7 +2,7 @@
 
 julia_version = "1.10.0"
 manifest_format = "2.0"
-project_hash = "c2ca849d0fd0b11d8528ce2df70839060f9847a4"
+project_hash = "e78a46039a6ddcce7fa32e4fa3d5068b4434962d"
 
 [[deps.ANSIColoredPrinters]]
 git-tree-sha1 = "574baf8110975760d391c710b6341da1afa48d8c"
@@ -157,8 +157,10 @@ version = "0.1.13"
     UnicodePlots = "b8865327-cd53-5732-bb35-84acbb429228"
 
 [[deps.CausalTables]]
-deps = ["DataAPI", "Distributions", "Documenter", "Graphs", "MacroTools", "TableOperations", "Tables"]
-path = "C:\\Users\\salba\\.julia\\dev\\CausalTables"
+deps = ["DataAPI", "Distributions", "Graphs", "MacroTools", "StatsBase", "TableOperations", "Tables"]
+git-tree-sha1 = "8ae740827309ca4983ac46cb9d0f98e12b72063c"
+repo-rev = "main"
+repo-url = "https://github.com/salbalkus/CausalTables.jl.git"
 uuid = "6af48e0c-efc2-4bf7-a92f-a553ccf79fd6"
 version = "1.0.0-DEV"
 

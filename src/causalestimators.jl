@@ -71,16 +71,24 @@ end
 
 MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn) = tmle_fromscaled(fitresult.Y, fitresult.Qn, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.scaler)
 
-mutable struct EIFConservative <: MMI.Unsupervised end
-
-MLJBase.fit(::EIFConservative, verbosity, Y, Qn, ct) = (fitresult = (; Y = Y, Qn = Qn, G = CausalTables.getgraph(ct)), cache = nothing, report = nothing)
-
-function MMI.transform(::EIFConservative, fitresult, Qδn, Hn)
-    D = eif(Hn, fitresult.Y, fitresult.Qn, Qδn)
-    σ2c = transpose(D) * adjacency_matrix(fitresult.G) * D / sum(adjacency_matrix(fitresult.G))
-    return (; σ2c = σ2c)
+mutable struct MultiplierBootstrap <: CausalEstimator 
+    B::Int
 end
 
+MMI.fit(::MultiplierBootstrap, verbosity, Y, Qn) = (fitresult = (; Y = Y, Qn = Qn), cache = nothing, report = nothing)
 
+function MMI.transform(sampler::MultiplierBootstrap, fitresult, Qδn, Hn) 
+    n = length(fitresult.Y)
+    W = rand(Normal(1, 1), n, sampler.B)
 
+    ξ = eif(Hn, Y, Qn, Qδn)
+    Wξ = W .* ξ
+
+    ψ = mean(ξ)
+    σ2naive = var(ξ)
+    Wψ = mean(Wξ, dims = 1)
+
+    # n's are slightly wrong here, fix them later
+    return var(Wψ) - σ2naive / n
+end
 

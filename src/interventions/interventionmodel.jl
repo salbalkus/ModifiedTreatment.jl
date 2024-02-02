@@ -2,18 +2,14 @@
 mutable struct InterventionModel <: MMI.Unsupervised end
 
 function MMI.fit(m::InterventionModel, verbosity, O)
-    # TODO: Assumes only a single treatment is specified.
-    LAs = CausalTables.replacetable(O, TableOperations.select(CausalTables.summarize(O), setdiff(keys(O.tbl), (O.response,))...) |> Tables.columntable)
-    summaryvars = [CausalTables.get_var_to_summarize(s) for s in LAs.summaries]
-    summarytreatment = keys(LAs.summaries)[summaryvars .== LAs.treatment]
-    Lstbl = TableOperations.select(LAs, vcat(LAs.controls, keys(LAs.summaries)[summaryvars .!= LAs.treatment]...)...) |> Tables.columntable
-    Ls = CausalTables.replacetable(LAs, Lstbl)
-    
+    LAs, A, L, summaries, treatmentvar = get_summarized_data(O)
+
     fitresult = (; 
                 LAs = LAs,
-                A = CausalTables.gettreatment(LAs),
-                Ls = Ls,
-                summarytreatment = summarytreatment
+                A = A,
+                L = L,
+                summaries = summaries,
+                treatmentvar = treatmentvar
                 )
 
     cache = nothing
@@ -21,32 +17,51 @@ function MMI.fit(m::InterventionModel, verbosity, O)
     return fitresult, cache, report
 end
 
-function MMI.predict(m::InterventionModel, fitresult, Δ::Intervention)
-    Asummaries = TableOperations.select(fitresult.LAs, fitresult.summarytreatment...) |> Tables.columntable
-    As = merge(NamedTuple{fitresult.summarytreatment}(Asummaries), NamedTuple{(fitresult.LAs.treatment,)}((fitresult.A,)))
-    return fitresult.LAs, fitresult.Ls, As
-end
+MMI.predict(m::InterventionModel, fitresult, intervention::Intervention) = (fitresult.LAs, fitresult.L, fitresult.A)
+MMI.transform(m::InterventionModel, fitresult, intervention::Intervention) = get_intervened_data(fitresult.LAs, fitresult.A, fitresult.L, intervention, fitresult.summaries, fitresult.treatmentvar)
+MMI.inverse_transform(m::InterventionModel, fitresult, intervention::Intervention) = MMI.transform(m, fitresult, inverse(intervention))
 
-function MMI.transform(m::InterventionModel, fitresult, Δ::Intervention)
-    Aδ = apply_intervention(Δ, fitresult.A, fitresult.Ls)
-    Aδd = differentiate_intervention(Δ, fitresult.A, fitresult.Ls)
+function get_summarized_data(O)
+    # Apply summary function to the data and select only the variables that are not the response
+    Os = CausalTables.summarize(O)
+    LAs = CausalTables.replacetable(Os, TableOperations.select(Os, setdiff(Tables.columnnames(Os), (getresponsesymbol(Os),))...) |> Tables.columntable)
 
-    Aδs = Vector{Pair}(undef, length(fitresult.summarytreatment))
-    Aδsd = Vector{Pair}(undef, length(fitresult.summarytreatment))
+    # Collect names of the variables being summarized
+    summaries = getsummaries(LAs)
+    summarizedvars = [CausalTables.get_var_to_summarize(s) for s in summaries]    
 
-    for (i, st) in enumerate(fitresult.summarytreatment)
-        Δsummary = get_induced_intervention(Δ, fitresult.LAs.summaries[st])
-        As = Tables.getcolumn(fitresult.LAs, st)
-        Aδs[i] = st => apply_intervention(Δsummary, As, fitresult.Ls)
-        Aδsd[i] = st => differentiate_intervention(Δsummary, As, fitresult.Ls)
+    # Check to make sure treatment is not being summarized multiple times
+    treatmentvar = gettreatmentsymbol(LAs)
+    if count(==(treatmentvar), summarizedvars) > 1
+        error("Treatment variable is being summarized multiple times. This is not allowed.")
+    end
+    if treatmentvar ∈ keys(summaries) && count(==(CausalTables.get_var_to_summarize(summaries[treatmentvar])), summarizedvars) > 1
+        error("Treatment variable is a summary of a variable that is being summarized in other ways. This is not allowed.")
     end
 
-    t = (fitresult.LAs.treatment,)
-    Aderivatives = merge(NamedTuple{t}((Aδd,)), NamedTuple(Aδsd))
-    Aδinterventions = merge(NamedTuple{t}((Aδ,)), NamedTuple(Aδs))
-    LAδinterventions = CausalTables.replacetable(fitresult.Ls, merge(fitresult.Ls.tbl, Aδinterventions))
-    return LAδinterventions, Aderivatives
+    A = CausalTables.gettreatment(LAs)
+    L = CausalTables.getcontrols(LAs)
+
+    return LAs, NamedTuple{(gettreatmentsymbol(LAs),)}((A,)), L, summaries, treatmentvar
 end
 
-MMI.inverse_transform(m::InterventionModel, fitresult, Δ::Intervention) = MMI.transform(m, fitresult, inverse(Δ))
+
+function get_intervened_data(LAs, A, L, intervention::Intervention, summaries, treatmentvar)
+    if treatmentvar ∈ keys(summaries)
+        # if the treatment is a network summary, need to construct the induced intervention before applying
+        Δ = get_induced_intervention(intervention, summaries[treatmentvar])
+    else
+        Δ = intervention
+    end
+
+    Avec = A[treatmentvar]
+    Aδ = apply_intervention(Δ, Avec, L)
+    Aδd = differentiate_intervention(Δ, Avec, L)
+
+    t = (treatmentvar,)
+    Aderivatives = NamedTuple{t}((Aδd,))#, NamedTuple(Aδsd))
+    Aδinterventions = NamedTuple{t}((Aδ,))#, NamedTuple(Aδs))
+    LAδinterventions = CausalTables.replacetable(L, merge(gettable(L), Aδinterventions))
+    return LAδinterventions, Aderivatives
+end
 

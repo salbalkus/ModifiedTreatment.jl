@@ -21,12 +21,6 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
     outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(estimators, Y, Qn, Qδn, Hn, Hshiftn)
 
-    # Conservative EIF variance estimate
-    #mach_consvar = machine(MTP.EIFConservative(), Y, Qn, gdf_source) |> fit!
-    #consvar = MMI.transform(mach_consvar, Qδn, Hn)
-    #onestep = merge(estimates[3], consvar)
-    #tmle = merge(estimates[4], consvar)
-
     return (; 
         outcome_regression = outcome_regression_est,
         ipw = ipw_est,
