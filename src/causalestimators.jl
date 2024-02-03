@@ -1,21 +1,54 @@
+Estimate = Union{Float64, Nothing}
+# CausalEstimatorResult objects
+
+abstract type CausalEstimatorResult end
+
+mutable struct OutcomeRegressionResult <: CausalEstimatorResult
+    ψ::Estimate
+    σ2boot::Estimate
+end
+OutcomeRegressionResult(ψ) = OutcomeRegressionResult(ψ, nothing)
+
+mutable struct IPWResult <: CausalEstimatorResult
+    ψ::Estimate
+    σ2::Estimate
+    σ2boot::Estimate
+end
+IPWResult(ψ, σ2) = IPWResult(ψ, σ2, nothing)
+
+mutable struct OneStepResult <: CausalEstimatorResult
+    ψ::Estimate
+    σ2::Estimate
+    σ2boot::Estimate
+end
+OneStepResult(ψ, σ2) = OneStepResult(ψ, σ2, nothing)
+
+mutable struct TMLEResult <: CausalEstimatorResult
+    ψ::Estimate
+    σ2::Estimate
+    σ2boot::Estimate
+end
+TMLEResult(ψ, σ2) = TMLEResult(ψ, σ2, nothing)
+
+# functions to compute estimators from nuisance parameters
 
 eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
 
+outcome_regression_transform(Qδn::Vector) = OutcomeRegressionResult(mean(Qδn))
 outcome_regression_transform(Qδn::Node) = node(Qδn -> outcome_regression_transform(Qδn), Qδn)
-outcome_regression_transform(Qδn::Array) = (; ψ = mean(Qδn))
 
 # define basic estimators
 function ipw(Y::Array, Hn::Array)
     ψ = sum(Hn .* Y) / sum(Hn)
     σ2 = var(Hn .* (Y .- ψ)) / length(Hn)
-    return (; ψ = ψ, σ2 = σ2)
+    return IPWResult(ψ, σ2)
 end
 
 function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array)
     D = eif(Hn, Y, Qn, Qδn)
     ψ = mean(D)
     σ2 = var(D) / length(D)
-    return (; ψ = ψ, σ2 = σ2)
+    return OneStepResult(ψ, σ2)
 end
 
 function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array)
@@ -43,7 +76,7 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     # Estimate variance
     D = eif(Hn, Y, Qn, Qδn)
     σ2 = var(D) / length(D)
-    return (; ψ = ψ, σ2 = σ2)
+    return TMLEResult(ψ, σ2)
 end
 
 # Define MLJ-type estimaator machines for the learning network
@@ -79,16 +112,26 @@ MMI.fit(::MultiplierBootstrap, verbosity, Y, Qn) = (fitresult = (; Y = Y, Qn = Q
 
 function MMI.transform(sampler::MultiplierBootstrap, fitresult, Qδn, Hn) 
     n = length(fitresult.Y)
-    W = rand(Normal(1, 1), n, sampler.B)
 
+    # Compute the EIF components
     ξ = eif(Hn, Y, Qn, Qδn)
-    Wξ = W .* ξ
-
     ψ = mean(ξ)
-    σ2naive = var(ξ)
-    Wψ = mean(Wξ, dims = 1)
+    D = ξ .- ψ
+    σ2naive = var(D)
 
-    # n's are slightly wrong here, fix them later
-    return var(Wψ) - σ2naive / n
+
+    # Randomly perturb the EIF over many samples
+    W = rand(Normal(1, 1), n, sampler.B)
+    WD = W .* D
+
+    # Compute many "perturbed resamples" of ψ, compute their variance, and subtract off the naive bias
+    Wψ = mean(WD, dims = 1)
+    return (var(Wψ) - σ2naive) / n
 end
+
+
+
+
+
+
 

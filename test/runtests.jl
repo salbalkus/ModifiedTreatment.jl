@@ -12,9 +12,9 @@ using Tables
 using TableOperations
 
 using Random
+#using Logging
 
-using Logging
-
+Random.seed!(1)
 
 # function for testing approximate equality of statistical estimators
 within(x, truth, ϵ) = abs(x - truth) < ϵ
@@ -109,7 +109,6 @@ end
     mach_mean = machine(mean_crossfit, LA, Y) |> fit!
     pred_mean = MLJBase.predict(mach_mean, LA)
     @test cor(Y, pred_mean) ≈ 1.0
-
     ratio_model = DensityRatioPropensity(OracleDensityEstimator(dgp_iid))
     ratio_crossfit = CrossFitModel(ratio_model, CV())
    
@@ -151,6 +150,7 @@ end
     mtpmach = machine(mtp, data_large, intervention) |> fit!
     
     output_or = outcome_regression(mtpmach, intervention)
+    output_or
     @test within(output_or.ψ, truth.ψ, moe)
     
     output_ipw = ipw(mtpmach, intervention)
