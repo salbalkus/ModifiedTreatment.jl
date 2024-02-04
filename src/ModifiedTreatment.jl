@@ -52,7 +52,7 @@ module ModifiedTreatment
     export outcome_regression, ipw, onestep, tmle, nuisance_machines
 
     include("bootstrap.jl")
-    export bootstrap
+    export bootstrap, bootstrap!
 
     # general
     export prefit, fit, transform, inverse_transform, predict

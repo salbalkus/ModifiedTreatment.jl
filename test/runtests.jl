@@ -150,7 +150,6 @@ end
     mtpmach = machine(mtp, data_large, intervention) |> fit!
     
     output_or = outcome_regression(mtpmach, intervention)
-    output_or
     @test within(output_or.ψ, truth.ψ, moe)
     
     output_ipw = ipw(mtpmach, intervention)
@@ -163,9 +162,10 @@ end
     @test within(output_tmle.ψ, truth.ψ, moe)
     
     # TODO: Add better tests to ensure the bootstrap is working correctly
-    B = 5
-    boot = ModifiedTreatment.bootstrap(mtpmach, intervention, B)
-    @test length(boot) == B
+    results = (or = output_or, ipw = output_ipw, onestep = output_onestep, tmle = output_tmle)
+    B = 10
+    ModifiedTreatment.bootstrap!(mtpmach, intervention, B; results...)    
+    @test all(values(map(x -> x.σ2boot, results)) .< moe)
 end 
 
 
@@ -198,7 +198,8 @@ end
     output_tmle = tmle(mtpmach, intervention)
     @test within(output_tmle.ψ, truth.ψ, moe)
 
+    results = (or = output_or, ipw = output_ipw, onestep = output_onestep, tmle = output_tmle)
     B = 10
-    boot = ModifiedTreatment.bootstrap(mtpmach, intervention, B)
-    @test length(boot) == B
+    ModifiedTreatment.bootstrap!(mtpmach, intervention, B; results...)    
+    @test all(values(map(x -> x.σ2boot, results)) .< moe)
 end
