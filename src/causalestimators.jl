@@ -1,6 +1,6 @@
 Estimate = Union{Float64, Nothing}
-# CausalEstimatorResult objects
 
+# CausalEstimatorResult objects
 abstract type CausalEstimatorResult end
 
 mutable struct OutcomeRegressionResult <: CausalEstimatorResult
@@ -28,6 +28,7 @@ mutable struct TMLEResult <: CausalEstimatorResult
     σ2::Estimate
     σ2boot::Estimate
 end
+
 TMLEResult(ψ, σ2) = TMLEResult(ψ, σ2, nothing)
 
 # functions to compute estimators from nuisance parameters
@@ -129,6 +130,39 @@ function MMI.transform(sampler::MultiplierBootstrap, fitresult, Qδn, Hn)
     return (var(Wψ) - σ2naive) / n
 end
 
+mutable struct MTPResult
+    result::Union{CausalEstimatorResult, NamedTuple}
+    mtp::Machine
+    intervention::Intervention
+end
+getestimate(x::MTPResult) = x.result
+getmtp(x::MTPResult) = x.mtp
+getintervention(x::MTPResult) = x.intervention
+
+function ψ(x::MTPResult)
+    est = getestimate(x)
+    if typeof(est) == CausalEstimatorResult
+        return est.ψ
+    else
+        return map(e -> e.ψ, est)
+    end
+end
+function σ2(x::MTPResult)
+    est = getestimate(x)
+    if typeof(est) == CausalEstimatorResult
+        return est.σ2
+    else
+        return map(e -> e.σ2, est)
+    end
+end
+function σ2boot(x::MTPResult)
+    est = getestimate(x)
+    if typeof(est) == CausalEstimatorResult
+        return est.σ2boot
+    else
+        return map(e -> e.σ2boot, est)
+    end
+end
 
 
 

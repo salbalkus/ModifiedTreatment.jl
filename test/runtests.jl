@@ -146,26 +146,23 @@ end
     boot_sampler = BasicSampler()
     cv_splitter = nothing#CV(nfolds = 5)
 
-    mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
+    mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
+    output = ModifiedTreatment.estimate(mtpmach, intervention)
     
-    output_or = outcome_regression(mtpmach, intervention)
-    @test within(output_or.ψ, truth.ψ, moe)
+    ψ_est = ψ(output)
     
-    output_ipw = ipw(mtpmach, intervention)
-    @test within(output_ipw.ψ, truth.ψ, moe)
+    @test within(ψ_est.outcome_regression, truth.ψ, moe)
+    @test within(ψ_est.ipw, truth.ψ, moe)
+    @test within(ψ_est.onestep, truth.ψ, moe)
+    @test within(ψ_est.tmle, truth.ψ, moe)
     
-    output_onestep = onestep(mtpmach, intervention)
-    @test within(output_onestep.ψ, truth.ψ, moe)
 
-    output_tmle = tmle(mtpmach, intervention)
-    @test within(output_tmle.ψ, truth.ψ, moe)
-    
     # TODO: Add better tests to ensure the bootstrap is working correctly
-    results = (or = output_or, ipw = output_ipw, onestep = output_onestep, tmle = output_tmle)
     B = 10
-    ModifiedTreatment.bootstrap!(mtpmach, intervention, B; results...)    
-    @test all(values(map(x -> x.σ2boot, results)) .< moe)
+    ModifiedTreatment.bootstrap!(BasicSampler(), output, B)  
+    σ2boot_est = σ2boot(output)
+    @test all(values(σ2boot_est) .< moe)
 end 
 
 
@@ -180,26 +177,24 @@ end
     truth = compute_true_MTP(dgp_net, data_large, intervention)
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_net))
-    boot_sampler = VertexSampler()
     cv_splitter = nothing#CV(nfolds = 5)
 
-    mtp = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter)
+    mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
 
-    output_or = outcome_regression(mtpmach, intervention)
-    @test within(output_or.ψ, truth.ψ, moe)
+    output = ModifiedTreatment.estimate(mtpmach, intervention)
     
-    output_ipw = ipw(mtpmach, intervention)
-    @test within(output_ipw.ψ, truth.ψ, moe)
+    ψ_est = ψ(output)
     
-    output_onestep = onestep(mtpmach, intervention)
-    @test within(output_onestep.ψ, truth.ψ, moe)
+    @test within(ψ_est.outcome_regression, truth.ψ, moe)
+    @test within(ψ_est.ipw, truth.ψ, moe)
+    @test within(ψ_est.onestep, truth.ψ, moe)
+    @test within(ψ_est.tmle, truth.ψ, moe)
+    
 
-    output_tmle = tmle(mtpmach, intervention)
-    @test within(output_tmle.ψ, truth.ψ, moe)
-
-    results = (or = output_or, ipw = output_ipw, onestep = output_onestep, tmle = output_tmle)
+    # TODO: Add better tests to ensure the bootstrap is working correctly
     B = 10
-    ModifiedTreatment.bootstrap!(mtpmach, intervention, B; results...)    
-    @test all(values(map(x -> x.σ2boot, results)) .< moe)
+    ModifiedTreatment.bootstrap!(ClusterSampler(2), output, B)  
+    σ2boot_est = σ2boot(output)
+    @test all(values(σ2boot_est) .< moe)
 end

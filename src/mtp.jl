@@ -1,15 +1,13 @@
 mutable struct MTP <: UnsupervisedNetworkComposite
     mean_estimator
     density_ratio_estimator
-    boot_sampler
     cv_splitter
     confidence::Float64
 end
 
-MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter) = MTP(mean_estimator, density_ratio_estimator, boot_sampler, cv_splitter, 0.95)
+MTP(mean_estimator, density_ratio_estimator, cv_splitter) = MTP(mean_estimator, density_ratio_estimator, cv_splitter, 0.95)
 
 function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
-    estimators = (IPW(), OneStep(), TMLE())
     δ = source(Δ)
     Os = source(O)
 
@@ -19,7 +17,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
 
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
-    outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(estimators, Y, Qn, Qδn, Hn, Hshiftn)
+    outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, Qn, Qδn, Hn, Hshiftn)
 
     return (; 
         outcome_regression = outcome_regression_est,
@@ -46,10 +44,20 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
 end
 
 # Define custom functions akin to `predict` that yield the result of each estimation strategy from a learning network machine
-outcome_regression(machine, δnew) = MLJBase.unwrap(machine.fitresult).outcome_regression(δnew)
-ipw(machine, δnew) = MLJBase.unwrap(machine.fitresult).ipw(δnew)
-onestep(machine, δnew) = MLJBase.unwrap(machine.fitresult).onestep(δnew)
-tmle(machine, δnew) = MLJBase.unwrap(machine.fitresult).tmle(δnew)
+outcome_regression(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).outcome_regression(δnew), machine, δnew)
+ipw(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).ipw(δnew), machine, δnew)
+onestep(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).onestep(δnew), machine, δnew)
+tmle(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).tmle(δnew), machine, δnew)
+
+estimate(machine::Machine, δnew::Intervention) = MTPResult(
+    (outcome_regression = MLJBase.unwrap(machine.fitresult).outcome_regression(δnew),
+     ipw = MLJBase.unwrap(machine.fitresult).ipw(δnew),
+     onestep = MLJBase.unwrap(machine.fitresult).onestep(δnew),
+     tmle = MLJBase.unwrap(machine.fitresult).tmle(δnew)
+    ),
+    machine,
+    δnew
+)
 
 # Define custom function to extract the nuisance estimators from the learning network machine
 nuisance_machines(machine::Machine{MTP}) = MLJBase.unwrap(machine.fitresult).nuisance_machines
@@ -86,16 +94,18 @@ function estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs
     Qδn = MMI.predict(mach_mean, LAδs)
 
     # Get Density Ratio
-    Hn = MMI.predict(mach_density, LAδsinv, LAs) * prod(dAδs)
-    Hshiftn = MMI.predict(mach_density, LAs, LAδs) * prod(dAδsinv)
+    Hn = MMI.predict(mach_density, LAδsinv, LAs) * prod(dAδsinv)
+
+    # TODO: Check if we actually don't need to multiply by a derivative here
+    Hshiftn = MMI.predict(mach_density, LAs, LAδs)
 
     return Qn, Qδn, Hn, Hshiftn
 end
 
-function estimate_causal_parameters(estimators::Tuple, Y, Qn, Qδn, Hn, Hshiftn)
-    mach_ipw = machine(estimators[1], Y) |> fit!
-    mach_onestep = machine(estimators[2], Y, Qn) |> fit!
-    mach_tmle = machine(estimators[3], Y, Qn) |> fit!
+function estimate_causal_parameters(Y, Qn, Qδn, Hn, Hshiftn)
+    mach_ipw = machine(IPW(), Y) |> fit!
+    mach_onestep = machine(OneStep(), Y, Qn) |> fit!
+    mach_tmle = machine(TMLE(), Y, Qn) |> fit!
 
     outcome_regression_est = outcome_regression_transform(Qδn)
     ipw_est = MMI.transform(mach_ipw, Hn)

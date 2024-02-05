@@ -42,6 +42,7 @@ module ModifiedTreatment
 
     include("causalestimators.jl")
     export estimate_outcome_regression, OutcomeRegressor, IPW, OneStep, TMLE
+    export getestimate, getmtp, getintervention
 
     include("truth.jl")
     export compute_true_MTP
@@ -49,7 +50,8 @@ module ModifiedTreatment
     include("mtp.jl")
     export MTP, intervene_on_data, crossfit_nuisance_estimators, estimate_nuisances, estimate_causal_parameters, bootstrap_estimates
     export resample_nuisances, resample_causal_parameters, lazy_iterate_predict, collect_bootstrapped_estimates
-    export outcome_regression, ipw, onestep, tmle, nuisance_machines
+    export outcome_regression, ipw, onestep, tmle, nuisance_machines, estimate
+    export ψ, σ2, σ2boot
 
     include("bootstrap.jl")
     export bootstrap, bootstrap!

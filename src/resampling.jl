@@ -13,8 +13,9 @@ mutable struct ClusterSampler <: BootstrapSampler
     K # size of each cluster. Must be identical across clusters
 end
 function bootstrap(sampler::ClusterSampler, O::CausalTable)
-    n_clusters = nrow(gdf.graph_data) ÷ sampler.K
-    samples = [vcat(c, neighbors(getgraph(O), c)) for c in sample(1:DataAPI.nrow(O), n_clusters)]
+    g = getgraph(O)
+    n_clusters = DataAPI.nrow(O) ÷ sampler.K
+    samples = reduce(vcat, [vcat(c, neighbors(g, c)) for c in sample(1:DataAPI.nrow(O), n_clusters)])
     return cluster_index(O, samples)
 end
 
@@ -30,17 +31,18 @@ function cluster_index(O, s)
     I_new = copy(Ikeys)
 
     # Construct a graph of the nodes that were actually sampled
-    g_new = getgraph(O)[I_new]
+    g = getgraph(O)
+    g_new = g[I_new]
    
     # Add the duplicated nodes
     for val in 2:maximum(Ivalues)
         for _ in 1:(val-1)
             Ikeys_next = Ikeys[Ivalues .== val]
             I_new = vcat(I_new, Ikeys_next)
-            g_new = blockdiag(g_new, gdf.graph[Ikeys_next])
+            g_new = blockdiag(g_new, g[Ikeys_next])
         end
     end
-    tbl_new = Tables.subset(O.tbl, I_new)
+    tbl_new = Tables.subset(gettable(O), I_new)
     return CausalTables.replace(O; tbl = tbl_new, graph = g_new)
 end
 
