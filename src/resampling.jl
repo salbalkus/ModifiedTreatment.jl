@@ -10,42 +10,28 @@ bootstrap(::BasicSampler, O::CausalTable) = Tables.subset(O, rand(1:DataAPI.nrow
 ######
 
 mutable struct ClusterSampler <: BootstrapSampler
+    n
     K # size of each cluster. Must be identical across clusters
+    n_clusters
+    graph
+    function ClusterSampler(n, K)
+        n_clusters = n ÷ K
+        # Since we're indexing connected observations adjacently,
+        # we know that the adjacency matrix will be block diagonal
+        block = ones(K, K)
+        block[diagind(block)] .= 0
+        block = sparse(block)
+        g = Graph(blockdiag((block for i in 1:n_clusters)...))
+        new(n, K, n_clusters, g)
+    end
 end
+
 function bootstrap(bootstrapsampler::ClusterSampler, O::CausalTable)
     g = getgraph(O)
-    n_clusters = DataAPI.nrow(O) ÷ bootstrapsampler.K
+    samples = reduce(vcat, [vcat(c, neighbors(g, c)) for c in sample(1:DataAPI.nrow(O), bootstrapsampler.n_clusters)])
 
-    # TODO: The lines below are massive compute time bottleneck for bootstrapping. Find a way to reduce the time
-    samples = reduce(vcat, [vcat(c, neighbors(g, c)) for c in sample(1:DataAPI.nrow(O), n_clusters)])
-    return cluster_index(O, samples)
-end
-
-# TODO: How do we know the dataframe row number matches up with the vertex number?
-function cluster_index(O, s)
-    
-    # Determine which nodes are duplicated in the sampling
-    Ic = countmap(s)
-    Ivalues = collect(values(Ic))
-    Ikeys = collect(keys(Ic))
-
-    # track the order in which indices are added to the new graph
-    I_new = copy(Ikeys)
-
-    # Construct a graph of the nodes that were actually sampled
-    g = getgraph(O)
-    g_new = g[I_new]
-   
-    # Add the duplicated nodes
-    for val in 2:maximum(Ivalues)
-        for _ in 1:(val-1)
-            Ikeys_next = Ikeys[Ivalues .== val]
-            I_new = vcat(I_new, Ikeys_next)
-            g_new = blockdiag(g_new, g[Ikeys_next])
-        end
-    end
-    tbl_new = Tables.subset(gettable(O), I_new)
-    return CausalTables.replace(O; tbl = tbl_new, graph = g_new)
+    # subset the table and combine with the graph
+    return CausalTables.replace(O; tbl = Tables.subset(O.tbl, samples), graph = bootstrapsampler.graph)
 end
 
 ### Vertex samplers

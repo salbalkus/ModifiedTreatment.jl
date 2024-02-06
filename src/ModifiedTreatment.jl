@@ -11,7 +11,7 @@ module ModifiedTreatment
     using DataAPI
     using CausalTables
 
-    import LinearAlgebra: diagm, I
+    using LinearAlgebra
     import Combinatorics: combinations
     using SparseArrays
 

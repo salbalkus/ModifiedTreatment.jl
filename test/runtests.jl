@@ -10,6 +10,7 @@ using Condensity
 
 using Tables
 using TableOperations
+using DataAPI
 
 using Random
 #using Logging
@@ -202,9 +203,8 @@ end
     @test within(ψ_est.tmle, truth.ψ, moe)
     
     # TODO: Add better tests to ensure the bootstrap is working correctly
-    B = 100
-
-    @time ModifiedTreatment.bootstrap!(ClusterSampler(2), output, B)  
+    B = 10
+    @time ModifiedTreatment.bootstrap!(ClusterSampler(DataAPI.nrow(data_large), 2), output, B)  
     σ2boot_est = σ2boot(output)
     values(σ2boot_est) .* 10^4
     @test all(values(σ2boot_est) .< moe)
