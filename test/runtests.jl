@@ -29,13 +29,14 @@ data_iid = rand(dgp_iid, 100)
 
 distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
         :L1 => (; O...) -> DiscreteUniform(1, 5),
-        :L1_s => Sum(:L1),
+        :L1_s => Sum(:L1, include_self = false),
         :A => (; O...) -> (@. Normal(O[:L1], 0.5)),
         :A_s => Sum(:A, include_self = false),
         :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:L1_s] + 0.1 * O[:L1] + 10, 1))
     ])
 
-dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, 4), distseqnet; 
+K = 4
+dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, K), distseqnet; 
                             treatment = :A_s, response = :Y, controls = [:L1, :L1_s, :A]);
 data_net = rand(dgp_net, 100)
 
@@ -134,7 +135,7 @@ end
   
     Random.seed!(1)
     
-    data_large = rand(dgp_iid, 10^5)
+    data_large = rand(dgp_iid, 10^4)
 
     intervention = LinearShift(1.1, 0.5)
     truth = compute_true_MTP(dgp_iid, data_large, intervention)
@@ -160,21 +161,32 @@ end
 
     # TODO: Add better tests to ensure the bootstrap is working correctly
     B = 10
-    ModifiedTreatment.bootstrap!(BasicSampler(), output, B)  
-    σ2boot_est = σ2boot(output)
-    @test all(values(σ2boot_est) .< moe)
+    ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
+    @test all(values(σ2boot(output)) .< moe)
 end 
 
 
 @testset "MTP Network" begin
     Random.seed!(1)
+    moe = 0.1
+
+    distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
+        :L1 => (; O...) -> DiscreteUniform(1, 5),
+        :A => (; O...) -> (@. Normal(0.2 * O[:L1], 0.5)),
+        :A_s => Sum(:A, include_self = true),
+        :Y => (; O...) -> (@. Normal(O[:A_s] + 0.1 * O[:L1] + 10, 1))
+    ])
+
+    # Note this only yields clusters for K = 1, not any other K
+    dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, 1), distseqnet; 
+                            treatment = :A_s, response = :Y, controls = [:L1, :A]);
     
     data_vlarge = rand(dgp_net, 10^6)
     data_large = rand(dgp_net, 10^4)
 
     intervention = LinearShift(1.01, 0.1)
     
-    truth = compute_true_MTP(dgp_net, data_large, intervention)
+    truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
     density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_net))
     cv_splitter = nothing#CV(nfolds = 5)
@@ -183,18 +195,17 @@ end
     mtpmach = machine(mtp, data_large, intervention) |> fit!
 
     output = ModifiedTreatment.estimate(mtpmach, intervention)
-    
     ψ_est = ψ(output)
-    
     @test within(ψ_est.outcome_regression, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
     
-
     # TODO: Add better tests to ensure the bootstrap is working correctly
-    B = 10
-    ModifiedTreatment.bootstrap!(ClusterSampler(2), output, B)  
+    B = 100
+
+    @time ModifiedTreatment.bootstrap!(ClusterSampler(2), output, B)  
     σ2boot_est = σ2boot(output)
+    values(σ2boot_est) .* 10^4
     @test all(values(σ2boot_est) .< moe)
 end

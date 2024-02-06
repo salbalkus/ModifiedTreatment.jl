@@ -10,9 +10,13 @@ function bootstrap(resampler::BootstrapSampler, mtpresult::MTPResult, B::Int64)
     types = typeof.(collect(values(results)))
 
     # Collect bootstrapped estimates
-    bootstrap_samples = [bootstrap_sample(mtpresult, resampler, mach_Qn, mach_Hn, O, types) for b in 1:B]
-    output = var.(zip(bootstrap_samples...))
-    return NamedTuple{keys(results)}(output)
+    bootstrap_samples = Array{Float64}(undef, B, length(results))
+    for b in 1:B
+        bootstrap_samples[b, :] = bootstrap_sample(mtpresult, resampler, mach_Qn, mach_Hn, O, types)
+    end
+
+    output = var(bootstrap_samples, dims = 1)
+    return NamedTuple{keys(results)}((output[1, i] for i in 1:length(results)))
 end
 
 function bootstrap!(resampler::BootstrapSampler, mtpresult::MTPResult, B::Int64)
