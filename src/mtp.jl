@@ -50,7 +50,7 @@ onestep(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresu
 tmle(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).tmle(δnew), machine, δnew)
 
 estimate(machine::Machine, δnew::Intervention) = MTPResult(
-    (outcome_regression = MLJBase.unwrap(machine.fitresult).outcome_regression(δnew),
+    (or = MLJBase.unwrap(machine.fitresult).outcome_regression(δnew),
      ipw = MLJBase.unwrap(machine.fitresult).ipw(δnew),
      onestep = MLJBase.unwrap(machine.fitresult).onestep(δnew),
      tmle = MLJBase.unwrap(machine.fitresult).tmle(δnew)
