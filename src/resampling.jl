@@ -10,23 +10,31 @@ bootstrap(::BasicSampler, O::CausalTable) = Tables.subset(O, rand(1:DataAPI.nrow
 ######
 
 mutable struct ClusterSampler <: BootstrapSampler
-    n
-    K # size of each cluster. Must be identical across clusters
-    n_clusters
-    graph
-    function ClusterSampler(n, K)
-        n_clusters = n ÷ K
-        # Since we're indexing connected observations adjacently,
-        # we know that the adjacency matrix will be block diagonal
-        block = ones(K, K)
-        block[diagind(block)] .= 0
-        block = sparse(block)
-        g = Graph(blockdiag((block for i in 1:n_clusters)...))
-        new(n, K, n_clusters, g)
-    end
+    K::Int # size of each cluster. Must be identical across clusters
+    n_clusters::Union{Int, Nothing}
+    graph::Union{Graph, Nothing}
+    ClusterSampler(K) = new(K, nothing, nothing)
+end
+
+# Function to update the graph in the ClusterSampler to fit a new sample size
+function updategraph!(cs::ClusterSampler, O)
+    cs.n_clusters = DataAPI.nrow(O) ÷ cs.K
+    # Since we're indexing connected observations adjacently,
+    # we know that the adjacency matrix will be block diagonal
+    block = ones(cs.K, cs.K)
+    block[diagind(block)] .= 0
+    block = sparse(block)
+    cs.graph = Graph(blockdiag((block for i in 1:cs.n_clusters)...))
 end
 
 function bootstrap(bootstrapsampler::ClusterSampler, O::CausalTable)
+
+    # Get the underlying graph to construct the resample
+    if isnothing(bootstrapsampler.graph) || nv(bootstrapsampler.graph) != DataAPI.nrow(O)
+        updategraph!(bootstrapsampler, O)
+    end
+
+    # Sample the clusters
     g = getgraph(O)
     samples = reduce(vcat, [vcat(c, neighbors(g, c)) for c in sample(1:DataAPI.nrow(O), bootstrapsampler.n_clusters)])
 

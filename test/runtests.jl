@@ -153,8 +153,8 @@ end
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     
     ψ_est = ψ(output)
-    
-    @test within(ψ_est.outcome_regression, truth.ψ, moe)
+
+    @test within(ψ_est.or, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
@@ -197,15 +197,28 @@ end
 
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
-    @test within(ψ_est.outcome_regression, truth.ψ, moe)
+    @test within(ψ_est.or, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
     
     # TODO: Add better tests to ensure the bootstrap is working correctly
+
+    # Test the cluster bootstrap
     B = 10
-    @time ModifiedTreatment.bootstrap!(ClusterSampler(DataAPI.nrow(data_large), 2), output, B)  
+    clustersampler = ClusterSampler(2)
+    ModifiedTreatment.bootstrap!(clustersampler, output, B)  
+
     σ2boot_est = σ2boot(output)
     values(σ2boot_est) .* 10^4
+    @test all(values(σ2boot_est) .< moe)
+
+    # Test graph updating scheme
+    data_small = rand(dgp_net, 10^2)
+    mtpmach2 = machine(mtp, data_small, intervention) |> fit!
+    output2 = ModifiedTreatment.estimate(mtpmach2, intervention)
+    ModifiedTreatment.bootstrap!(clustersampler, output2, B)  
+    σ2boot_est2 = σ2boot(output2)
+    values(σ2boot_est2) .* 10^2
     @test all(values(σ2boot_est) .< moe)
 end
