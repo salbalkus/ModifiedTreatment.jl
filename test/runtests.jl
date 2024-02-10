@@ -183,7 +183,7 @@ end
                             treatment = :A_s, response = :Y, controls = [:L1, :A]);
     
     data_vlarge = rand(dgp_net, 10^6)
-    data_large = rand(dgp_net, 10^4)
+    data_large = rand(dgp_net, 10^3)
 
     intervention = LinearShift(1.01, 0.1)
     
@@ -210,15 +210,31 @@ end
     ModifiedTreatment.bootstrap!(clustersampler, output, B)  
 
     σ2boot_est = σ2boot(output)
-    values(σ2boot_est) .* 10^4
+    values(σ2boot_est) .* 10^3
     @test all(values(σ2boot_est) .< moe)
 
     # Test graph updating scheme
-    data_small = rand(dgp_net, 10^2)
+    data_small = rand(dgp_net, 10^4)
     mtpmach2 = machine(mtp, data_small, intervention) |> fit!
     output2 = ModifiedTreatment.estimate(mtpmach2, intervention)
     ModifiedTreatment.bootstrap!(clustersampler, output2, B)  
+    
+
     σ2boot_est2 = σ2boot(output2)
     values(σ2boot_est2) .* 10^2
     @test all(values(σ2boot_est) .< moe)
 end
+
+#@testset "Super Learning" begin
+
+    dgp = DataGeneratingProcess(
+        @dgp(
+            L1 ~ DiscreteUniform(1, 4),
+            L2 ~ Poisson(10),
+            L3 ~ Exp(1)
+            A ~ @. Normal(log(:L2) + :L3^2, 0.5),
+            Y ~ @. Normal(:A + :L1 * (0.5 * sin(:L2) + 0.1 * :L3)  + 10, 1)
+        );
+    )
+#end
+

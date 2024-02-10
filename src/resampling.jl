@@ -17,7 +17,7 @@ mutable struct ClusterSampler <: BootstrapSampler
 end
 
 # Function to update the graph in the ClusterSampler to fit a new sample size
-function updategraph!(cs::ClusterSampler, O)
+function update!(cs::ClusterSampler, O)
     cs.n_clusters = DataAPI.nrow(O) ÷ cs.K
     # Since we're indexing connected observations adjacently,
     # we know that the adjacency matrix will be block diagonal
@@ -30,8 +30,8 @@ end
 function bootstrap(bootstrapsampler::ClusterSampler, O::CausalTable)
 
     # Get the underlying graph to construct the resample
-    if isnothing(bootstrapsampler.graph) || nv(bootstrapsampler.graph) != DataAPI.nrow(O)
-        updategraph!(bootstrapsampler, O)
+    if isnothing(bootstrapsampler.graph) || (nv(bootstrapsampler.graph) != DataAPI.nrow(O)) || (bootstrapsampler.n_clusters != DataAPI.nrow(O) ÷ bootstrapsampler.K)
+        update!(bootstrapsampler, O)
     end
 
     # Sample the clusters
@@ -39,7 +39,7 @@ function bootstrap(bootstrapsampler::ClusterSampler, O::CausalTable)
     samples = reduce(vcat, [vcat(c, neighbors(g, c)) for c in sample(1:DataAPI.nrow(O), bootstrapsampler.n_clusters)])
 
     # subset the table and combine with the graph
-    return CausalTables.replace(O; tbl = Tables.subset(O.tbl, samples), graph = bootstrapsampler.graph)
+    return CausalTables.replace(O; tbl = Tables.subset(O.tbl, samples), graph = copy(bootstrapsampler.graph))
 end
 
 ### Vertex samplers
