@@ -36,7 +36,7 @@ distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
         :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:L1_s] + 0.1 * O[:L1] + 10, 1))
     ])
 
-K = 4
+K = 1
 dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, K), distseqnet; 
                             treatment = :A_s, response = :Y, controls = [:L1, :L1_s, :A]);
 data_net = rand(dgp_net, 100)
@@ -167,7 +167,7 @@ end
 end 
 
 
-@testset "MTP Network" begin
+#@testset "MTP Network" begin
     Random.seed!(1)
     moe = 0.1
 
@@ -178,14 +178,23 @@ end
         :Y => (; O...) -> (@. Normal(O[:A_s] + 0.1 * O[:L1] + 10, 1))
     ])
 
+    distseqnet = @dgp(
+        L1 ~ DiscreteUniform(1, 5),
+        A ~ (@. Normal(0.2 * :L1, 0.5)),
+        As = Sum(:A, include_self = false),
+        Y ~ (@. Normal(:As + 0.1 * :L1 + 10, 1))
+    );
+
     # Note this only yields clusters for K = 1, not any other K
     dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, 1), distseqnet; 
-                            treatment = :A_s, response = :Y, controls = [:L1, :A]);
+                            treatment = :As, response = :Y, controls = [:L1]);
+
+    map(get_var_to_summarize, getsummaries(data_large))
     
     data_vlarge = rand(dgp_net, 10^6)
     data_large = rand(dgp_net, 10^3)
 
-    intervention = LinearShift(1.01, 0.1)
+    intervention = AdditiveShift(0.1)
     
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
@@ -197,6 +206,7 @@ end
 
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
+    truth
     @test within(ψ_est.or, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
