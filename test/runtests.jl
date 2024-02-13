@@ -38,12 +38,8 @@ distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
 
 K = 1
 dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, K), distseqnet; 
-                            treatment = :A_s, response = :Y, controls = [:L1, :L1_s, :A]);
+                            treatment = :A, response = :Y, controls = [:L1]);
 data_net = rand(dgp_net, 100)
-
-[c for c in Tables.columns(data_large)]
-
-[i for i in 10:-1:1]
 
 @testset "Intervention" begin
     m = 1.5
@@ -90,38 +86,46 @@ end
     intervention = LinearShift(1.5, 0.5)
     intmach = machine(InterventionModel(), data_net) |> fit!
     LAs, Ls, As = predict(intmach, intervention) 
-    @test Ls.tbl == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, A = data_net.tbl.A)
-    @test As == (A_s = data_net.tbl.A_s,)
-
-    As
+    @test gettable(Ls) == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s)
+    @test As == (A = data_net.tbl.A, A_s = data_net.tbl.A_s,)
     @test LAs.tbl == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, A = data_net.tbl.A, A_s = data_net.tbl.A_s)
-
+    
     LAδs, dAδs = transform(intmach, intervention)
+    @test LAδs.tbl.A ≈ (data_net.tbl.A .* 1.5) .+ 0.5
     @test LAδs.tbl.A_s ≈ adjacency_matrix(data_net.graph) * ((data_net.tbl.A .* 1.5) .+ 0.5)
     @test dAδs.A_s == 1.5
+    @test dAδs.A == 1.5
 
     LAδsinv, dAδsinv = inverse_transform(intmach, intervention)
+    @test LAδsinv.tbl.A ≈ (data_net.tbl.A .- 0.5) ./ 1.5
     @test LAδsinv.tbl.A_s ≈ adjacency_matrix(data_net.graph) * ((data_net.tbl.A .- 0.5) ./ 1.5)
     @test dAδsinv.A_s == 1/1.5
+    @test dAδsinv.A == 1/1.5
 end
 
-@testset "CrossFitModel" begin   
+#@testset "CrossFitModel" begin   
     # Test a regression model
-    LA = replacetable(data_iid, TableOperations.select(data_iid, :L1, :A) |> Tables.columntable)    
-    Y = Tables.getcolumn(LA, :A) .+ 0.5 .* Tables.getcolumn(LA, :L1) .+ 10
+    LA = replacetable(data_net, TableOperations.select(data_net, :L1, :L1_s, :A, :A_s) |> Tables.columntable)    
+    Y = Tables.getcolumn(LA, :A) .+ 0.1 .* Tables.getcolumn(LA, :A_s) .+ 0.5 .* Tables.getcolumn(LA, :L1) .+ 0.1 .* Tables.getcolumn(LA, :L1_s) .+ 10
     mean_estimator = MLJLinearModels.LinearRegressor()
     mean_crossfit = CrossFitModel(mean_estimator, CV())
     mach_mean = machine(mean_crossfit, LA, Y) |> fit!
     pred_mean = MLJBase.predict(mach_mean, LA)
     @test cor(Y, pred_mean) ≈ 1.0
-    ratio_model = DensityRatioPropensity(OracleDensityEstimator(dgp_iid))
+
+    ratio_model = DecomposedPropensityRatio(DensityRatioPropensity(OracleDensityEstimator(dgp_net)))
     ratio_crossfit = CrossFitModel(ratio_model, CV())
-   
-    L = replacetable(data_iid, TableOperations.select(data_iid, :L1) |> Tables.columntable)
-    A = replacetable(data_iid, TableOperations.select(data_iid, :A) |> Tables.columntable)
+    L = TableOperations.select(data_net, :L1, :L1_s) |> Tables.columntable
+    A = TableOperations.select(data_net, :A, :A_s) |> Tables.columntable
     mach_ratio = machine(ratio_crossfit, L, A) |> fit!
+    LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), L1_s = Tables.getcolumn(L, :L1_s), A = Tables.getcolumn(A, :A), A_s = Tables.getcolumn(A, :A_s)))
     
-    LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), A = Tables.getcolumn(A, :A) ))
+    
+    g0 = pdf.(condensity(dgp_net, data_net, :A), Tables.getcolumn(LA, :A)) ./ pdf.(condensity(dgp_net, data_net, :A_s), Tables.getcolumn(LA, :A_s))
+    
+    
+    MLJBase.predict(mach_ratio, LA, LAδ)
+    
     @test all(MLJBase.predict(mach_ratio, LA, LAδ) .== 1.0)
 
     LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), A = Tables.getcolumn(A, :A) .+ 0.1))

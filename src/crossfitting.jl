@@ -21,19 +21,24 @@ end
 MMI.predict(cfm::CrossFitModel, fitresult, X...)  = vcat([MMI.predict(fitresult.machines[i], [Tables.subset(x, fitresult.tt_pairs[i][2]) for x in X]...) for i in 1:length(fitresult.machines)]...)
 MMI.transform(cfm::CrossFitModel, fitresult, X...)  = vcat([MMI.transform(fitresult.machines[i], [Tables.subset(x, fitresult.tt_pairs[i][2]) for x in X]...) for i in 1:length(fitresult.machines)]...)
 
-struct DecomposedPropensityRatio
-    model::Condensity.ConDensityRatioEstimator
+# TODO: Should we somehow specify this model must be a conditional density estimator specifically?
+struct DecomposedPropensityRatio <: MMI.Model
+    model::MMI.Model
 end
 
-function MMI.fit(dp::DecomposedPropensityRatio, verbosity, X::CausalTable, Y)
+function MMI.fit(dp::DecomposedPropensityRatio, verbosity, X, Y)
 
-    cur_treatment_names = Tables.columnnames(Y)
-    XY = merge(gettable(X), Y)
+    # ASSUME that treatment names are in REVERSE order of conditional dependence
+    cur_treatment_names = reverse(Tables.columnnames(Y))
+    XY = merge(X, Y)
     all_col_names = Tables.columnnames(XY)
     machines = Vector{Machine}(undef, length(cur_treatment_names))
-    
+    inclusions = Vector{Tuple}(undef, length(cur_treatment_names))
 
-    for k in (length(treatment_names):-1:1)
+    for k in 1:length(cur_treatment_names)
+
+        # track which variables are being included at each iteration
+        inclusions[k] = all_col_names
 
         # Construct a table of the target
         target = cur_treatment_names[k]
@@ -41,14 +46,14 @@ function MMI.fit(dp::DecomposedPropensityRatio, verbosity, X::CausalTable, Y)
 
         # Construct a covariate table that includes future targets as covariates
         # This iteratively removes the target from the table of all variables
-        cur_treatment_names = setdiff(all_col_names, target)
-        XY = TableOperations.select(XY, cur_treatment_names) |> Tables.columntable
+        all_col_names = filter(x -> x != target, all_col_names)
+        XY = TableOperations.select(XY, all_col_names...) |> Tables.columntable
 
         # Fit the propensity score ratio model of the current target, controlling for subsequent targets
-        machines[k] = fit!(machine(dp.model, XY, Yk), verbosity)
+        machines[k] = fit!(machine(dp.model, XY, Yk))
     end
 
-    fitresult = (; machines = machines,)
+    fitresult = (; machines = machines, inclusions = inclusions)
     cache = nothing
     report = nothing
     return fitresult, cache, report
@@ -56,5 +61,13 @@ end
 
 function MMI.predict(model::DecomposedPropensityRatio, fitresult, Xy_nu, Xy_de)
     # return the product of the ratios, based on the decomposition provided in Forastiere et al. (2021)
-    return prod([MMI.predict(mach, Xy_nu, Xy_de) for mach in fitresult.machines])
+    output = ones(DataAPI.nrow(Xy_nu))
+    for i in 1:length(fitresult.machines)
+        Xy_nu_i = replacetable(Xy_nu, TableOperations.select(Xy_nu, fitresult.inclusions[i]...) |> Tables.columntable)
+        Xy_de_i = replacetable(Xy_de, TableOperations.select(Xy_de, fitresult.inclusions[i]...) |> Tables.columntable)
+        pred = MMI.predict(fitresult.machines[i], Xy_nu_i, Xy_de_i)
+        println(pred)
+        output = output .* pred
+    end
+    return return output
 end

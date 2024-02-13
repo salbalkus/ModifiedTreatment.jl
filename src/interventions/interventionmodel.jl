@@ -2,7 +2,7 @@
 mutable struct InterventionModel <: MMI.Unsupervised end
 
 function MMI.fit(m::InterventionModel, verbosity, O)
-    LAs, A, L, summaries, treatmentvar = get_summarized_data(O)
+    LAs, A, L, summaries, treatmentvar, summarizedvars = get_summarized_data(O)
 
     fitresult = (; 
                 LAs = LAs,
@@ -40,10 +40,12 @@ function get_summarized_data(O)
         error("Treatment variable is a summarized variable. This is not allowed. Instead, specify `treatment` as the variable to which a direct intervention is being applied, and specify the summarized treatment in `summary` only.")
     end
 
-    A = CausalTables.gettreatment(LAs)
-    L = CausalTables.getcontrols(LAs)
+    # Construct new Tables / CausalTables to return
+    A = TableOperations.select(LAs, treatmentvar, summarizedvars[treatmentvar]) |> Tables.columntable
+    controlssymbols = getcontrolssymbols(LAs)
+    L = replacetable(LAs, TableOperations.select(LAs, controlssymbols..., values(summarizedvars[controlssymbols])...) |> Tables.columntable)
 
-    return LAs, NamedTuple{(gettreatmentsymbol(LAs),)}((A,)), L, summaries, treatmentvar, summarizedvars
+    return LAs, A, L, summaries, treatmentvar, summarizedvars
 end
 
 
@@ -63,10 +65,10 @@ function get_intervened_data(A, L, Δ::Intervention, summaries, treatmentvar, su
     if treatmentvar ∈ keys(summarizedvars)
         # Compute the induced intervention by mapping the treatmentvar to its intervention
         summarytreatmentvar = summarizedvars[treatmentvar]
-        Δs = get_induced_intervention(intervention, summaries[summarytreatmentvar])
+        Δs = get_induced_intervention(Δ, summaries[summarytreatmentvar])
         Avecsummary = A[summarytreatmentvar]
         Aδs = apply_intervention(Δs, Avecsummary, L)
-        Aδsd = differentiate_intervention(Δ, Avecsummary, L)
+        Aδsd = differentiate_intervention(Δs, Avecsummary, L)
 
         ts = (summarytreatmentvar,)
         Aderivatives = merge(Aderivatives, NamedTuple{ts}((Aδsd,)))

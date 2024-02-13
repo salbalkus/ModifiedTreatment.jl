@@ -35,7 +35,7 @@ module ModifiedTreatment
     export InterventionModel
 
     include("crossfitting.jl")
-    export CrossFitModel
+    export CrossFitModel, DecomposedPropensityRatio
 
     include("resampling.jl")
     export ResampledModel, BootstrapSampler, BasicSampler, ClusterSampler, VertexMooNSampler, VertexSampler
