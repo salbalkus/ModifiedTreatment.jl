@@ -103,35 +103,50 @@ end
     @test dAδsinv.A == 1/1.5
 end
 
-#@testset "CrossFitModel" begin   
-    # Test a regression model
+@testset "DecomposedPropensityRatio on Network" begin
     LA = replacetable(data_net, TableOperations.select(data_net, :L1, :L1_s, :A, :A_s) |> Tables.columntable)    
-    Y = Tables.getcolumn(LA, :A) .+ 0.1 .* Tables.getcolumn(LA, :A_s) .+ 0.5 .* Tables.getcolumn(LA, :L1) .+ 0.1 .* Tables.getcolumn(LA, :L1_s) .+ 10
+    ratio_model = DecomposedPropensityRatio(DensityRatioPropensity(OracleDensityEstimator(dgp_net)))
+    L = TableOperations.select(data_net, :L1, :L1_s) |> Tables.columntable
+    A = TableOperations.select(data_net, :A, :A_s) |> Tables.columntable
+    mach_ratio = machine(ratio_model, L, A) |> fit!
+    LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), L1_s = Tables.getcolumn(L, :L1_s), A = Tables.getcolumn(A, :A), A_s = Tables.getcolumn(A, :A_s)))
+    
+    @test all(MLJBase.predict(mach_ratio, LA, LAδ) .== 1.0)
+    
+    LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), L1_s = Tables.getcolumn(L, :L1_s), A = Tables.getcolumn(A, :A) .+ 0.1, A_s = Tables.getcolumn(A, :A_s) .+ (adjacency_matrix(getgraph(data_net)) * (ones(nv(data_net.graph)) .* 0.1))))
+    
+    g0shift = pdf.(condensity(dgp_net, LAδ, :A), Tables.getcolumn(LAδ, :A)) .* pdf.(condensity(dgp_net, LAδ, :A_s), Tables.getcolumn(LAδ, :A_s))
+    g0 = pdf.(condensity(dgp_net, LA, :A), Tables.getcolumn(LA, :A)) .* pdf.(condensity(dgp_net, LA, :A_s), Tables.getcolumn(LA, :A_s))
+    
+    foo = MLJBase.predict(mach_ratio, LA, LAδ)
+    true_ratio = g0 ./ g0shift
+    @test foo ≈ true_ratio
+end
+
+@testset "CrossFitModel" begin   
+    # Test a regression model
+    LA = replacetable(data_net, TableOperations.select(data_net, :L1, :A) |> Tables.columntable)    
+    Y = Tables.getcolumn(LA, :A) .+ 0.5 .* Tables.getcolumn(LA, :L1) .+ 10
     mean_estimator = MLJLinearModels.LinearRegressor()
     mean_crossfit = CrossFitModel(mean_estimator, CV())
     mach_mean = machine(mean_crossfit, LA, Y) |> fit!
     pred_mean = MLJBase.predict(mach_mean, LA)
     @test cor(Y, pred_mean) ≈ 1.0
 
-    ratio_model = DecomposedPropensityRatio(DensityRatioPropensity(OracleDensityEstimator(dgp_net)))
+    # TODO: Test this for network data. Note that currently CrossFitModel requires IID data because
+    # if data are split using vanilla CV, the summary functions will no longer be correct
+    ratio_model = DecomposedPropensityRatio(DensityRatioPropensity(OracleDensityEstimator(dgp_iid)))
     ratio_crossfit = CrossFitModel(ratio_model, CV())
-    L = TableOperations.select(data_net, :L1, :L1_s) |> Tables.columntable
-    A = TableOperations.select(data_net, :A, :A_s) |> Tables.columntable
+    L = TableOperations.select(data_net, :L1) |> Tables.columntable
+    A = TableOperations.select(data_net, :A) |> Tables.columntable
     mach_ratio = machine(ratio_crossfit, L, A) |> fit!
-    LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), L1_s = Tables.getcolumn(L, :L1_s), A = Tables.getcolumn(A, :A), A_s = Tables.getcolumn(A, :A_s)))
-    
-    
-    g0 = pdf.(condensity(dgp_net, data_net, :A), Tables.getcolumn(LA, :A)) ./ pdf.(condensity(dgp_net, data_net, :A_s), Tables.getcolumn(LA, :A_s))
-    
-    
-    MLJBase.predict(mach_ratio, LA, LAδ)
-    
+    LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), A = Tables.getcolumn(A, :A)))
+
     @test all(MLJBase.predict(mach_ratio, LA, LAδ) .== 1.0)
 
     LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), A = Tables.getcolumn(A, :A) .+ 0.1))
-    g0shift = pdf.(condensity(dgp_iid, L, :A), Tables.getcolumn(LAδ, :A))
-    g0 = pdf.(condensity(dgp_iid, L, :A), Tables.getcolumn(LA, :A))
-    MLJBase.predict(mach_ratio, LA, LAδ)
+    g0shift = pdf.(condensity(dgp_iid, LAδ, :A), Tables.getcolumn(LAδ, :A))
+    g0 = pdf.(condensity(dgp_iid, LA, :A), Tables.getcolumn(LA, :A))
     
     foo = MLJBase.predict(mach_ratio, LA, LAδ)
     true_ratio = g0 ./ g0shift
@@ -144,7 +159,6 @@ end
     Random.seed!(1)
     
     data_large = rand(dgp_iid, 10^4)
-
     intervention = LinearShift(1.1, 0.5)
     truth = compute_true_MTP(dgp_iid, data_large, intervention)
 
@@ -174,33 +188,24 @@ end
 end 
 
 
-#@testset "MTP Network" begin
+@testset "MTP Network" begin
     Random.seed!(1)
     moe = 0.1
 
-    distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
-        :L1 => (; O...) -> DiscreteUniform(1, 5),
-        :A => (; O...) -> (@. Normal(0.2 * O[:L1], 0.5)),
-        :A_s => Sum(:A, include_self = true),
-        :Y => (; O...) -> (@. Normal(O[:A_s] + 0.1 * O[:L1] + 10, 1))
-    ])
-
     distseqnet = @dgp(
         L1 ~ DiscreteUniform(1, 5),
-        A ~ (@. Normal(0.2 * :L1, 0.5)),
+        A ~ (@. Normal(:L1, 0.5)),
         As = Sum(:A, include_self = false),
         Y ~ (@. Normal(:As + 0.1 * :L1 + 10, 1))
     );
 
     # Note this only yields clusters for K = 1, not any other K
     dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, 1), distseqnet; 
-                            treatment = :As, response = :Y, controls = [:L1]);
+                            treatment = :A, response = :Y, controls = [:L1]);
 
-    map(get_var_to_summarize, getsummaries(data_large))
     
     data_vlarge = rand(dgp_net, 10^6)
     data_large = rand(dgp_net, 10^3)
-
     intervention = AdditiveShift(0.1)
     
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
@@ -236,9 +241,8 @@ end
     output2 = ModifiedTreatment.estimate(mtpmach2, intervention)
     ModifiedTreatment.bootstrap!(clustersampler, output2, B)  
     
-
     σ2boot_est2 = σ2boot(output2)
-    values(σ2boot_est2) .* 10^2
+    values(σ2boot_est2) .* 10^4
     @test all(values(σ2boot_est) .< moe)
 end
 

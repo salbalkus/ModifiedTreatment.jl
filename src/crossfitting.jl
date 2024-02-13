@@ -30,7 +30,7 @@ function MMI.fit(dp::DecomposedPropensityRatio, verbosity, X, Y)
 
     # ASSUME that treatment names are in REVERSE order of conditional dependence
     cur_treatment_names = reverse(Tables.columnnames(Y))
-    XY = merge(X, Y)
+    XY = merge(Tables.columntable(X), Tables.columntable(Y))
     all_col_names = Tables.columnnames(XY)
     machines = Vector{Machine}(undef, length(cur_treatment_names))
     inclusions = Vector{Tuple}(undef, length(cur_treatment_names))
@@ -59,15 +59,15 @@ function MMI.fit(dp::DecomposedPropensityRatio, verbosity, X, Y)
     return fitresult, cache, report
 end
 
-function MMI.predict(model::DecomposedPropensityRatio, fitresult, Xy_nu, Xy_de)
+function MMI.predict(::DecomposedPropensityRatio, fitresult, Xy_nu, Xy_de)
     # return the product of the ratios, based on the decomposition provided in Forastiere et al. (2021)
     output = ones(DataAPI.nrow(Xy_nu))
     for i in 1:length(fitresult.machines)
+        print(fitresult.inclusions)
         Xy_nu_i = replacetable(Xy_nu, TableOperations.select(Xy_nu, fitresult.inclusions[i]...) |> Tables.columntable)
         Xy_de_i = replacetable(Xy_de, TableOperations.select(Xy_de, fitresult.inclusions[i]...) |> Tables.columntable)
         pred = MMI.predict(fitresult.machines[i], Xy_nu_i, Xy_de_i)
-        println(pred)
         output = output .* pred
     end
-    return return output
+    return output
 end

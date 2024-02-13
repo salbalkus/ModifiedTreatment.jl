@@ -72,15 +72,15 @@ needs_shifted_propensity(types) = TMLEResult ∈ types
 
 function get_summarized_intervened_data(O::CausalTable, mtpresult::MTPResult, types::Vector{DataType})
     δ = getintervention(mtpresult)
-    LAs, A, L, summaries, treatmentvar = get_summarized_data(O)
+    LAs, A, L, summaries, treatmentvar, summarizedvars = get_summarized_data(O)
 
     # Based on the types of interventions, compute the nuisances that we need
     LAδ, dAδ, LAδinv, dAδinv = (nothing for _ = 1:4)
     if needs_conditional_mean(types)
-        LAδ, dAδ = get_intervened_data(LAs, A, L, δ, summaries, treatmentvar)
+        LAδ, dAδ = get_intervened_data(A, L, δ, summaries, treatmentvar, summarizedvars)
     end
     if needs_propensity(types)
-        LAδinv, dAδinv = get_intervened_data(LAs, A, L, inverse(δ), summaries, treatmentvar)
+        LAδinv, dAδinv = get_intervened_data(A, L, inverse(δ), summaries, treatmentvar, summarizedvars)
     end
     return LAs, LAδ, dAδ, LAδinv, dAδinv
 end

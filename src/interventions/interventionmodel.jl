@@ -41,34 +41,43 @@ function get_summarized_data(O)
     end
 
     # Construct new Tables / CausalTables to return
-    A = TableOperations.select(LAs, treatmentvar, summarizedvars[treatmentvar]) |> Tables.columntable
+    if treatmentvar ∈ keys(summarizedvars)
+        A = TableOperations.select(LAs, treatmentvar, summarizedvars[treatmentvar]) |> Tables.columntable
+    else
+        A = TableOperations.select(LAs, treatmentvar) |> Tables.columntable
+    end
     controlssymbols = getcontrolssymbols(LAs)
-    L = replacetable(LAs, TableOperations.select(LAs, controlssymbols..., values(summarizedvars[controlssymbols])...) |> Tables.columntable)
+
+    if any(controlssymbols .∈ [values(summarizedvars)])
+        L = replacetable(LAs, TableOperations.select(LAs, controlssymbols..., values(summarizedvars[controlssymbols])...) |> Tables.columntable)
+    else
+        L = replacetable(LAs, TableOperations.select(LAs, controlssymbols...) |> Tables.columntable)
+    end
 
     return LAs, A, L, summaries, treatmentvar, summarizedvars
 end
 
 
-function get_intervened_data(A, L, Δ::Intervention, summaries, treatmentvar, summarizedvars)
+function get_intervened_data(A, L, intervention::Intervention, summaries, treatmentvar, summarizedvars)
 
     # Apply direct intervention
     Avec = A[treatmentvar]
-    Aδ = apply_intervention(Δ, Avec, L)
-    Aδd = differentiate_intervention(Δ, Avec, L)
+    Aδ = apply_intervention(intervention, Avec, L)
+    Aδd = differentiate_intervention(intervention, Avec, L)
 
     t = (treatmentvar,)
     Aderivatives = NamedTuple{t}((Aδd,))
-    Aδinterventions = NamedTuple{t}((Aδ,))#, NamedTuple(Aδs))
+    Aδinterventions = NamedTuple{t}((Aδ,))
 
 
     # Apply summary intervention
     if treatmentvar ∈ keys(summarizedvars)
         # Compute the induced intervention by mapping the treatmentvar to its intervention
         summarytreatmentvar = summarizedvars[treatmentvar]
-        Δs = get_induced_intervention(Δ, summaries[summarytreatmentvar])
+        intervention_s = get_induced_intervention(intervention, summaries[summarytreatmentvar])
         Avecsummary = A[summarytreatmentvar]
-        Aδs = apply_intervention(Δs, Avecsummary, L)
-        Aδsd = differentiate_intervention(Δs, Avecsummary, L)
+        Aδs = apply_intervention(intervention_s, Avecsummary, L)
+        Aδsd = differentiate_intervention(intervention_s, Avecsummary, L)
 
         ts = (summarytreatmentvar,)
         Aderivatives = merge(Aderivatives, NamedTuple{ts}((Aδsd,)))
