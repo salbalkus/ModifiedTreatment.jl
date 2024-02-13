@@ -41,6 +41,9 @@ dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, K), distseqnet;
                             treatment = :A_s, response = :Y, controls = [:L1, :L1_s, :A]);
 data_net = rand(dgp_net, 100)
 
+[c for c in Tables.columns(data_large)]
+
+[i for i in 10:-1:1]
 
 @testset "Intervention" begin
     m = 1.5

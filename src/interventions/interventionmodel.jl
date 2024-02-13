@@ -70,7 +70,7 @@ function get_intervened_data(A, L, Δ::Intervention, summaries, treatmentvar, su
 
         ts = (summarytreatmentvar,)
         Aderivatives = merge(Aderivatives, NamedTuple{ts}((Aδsd,)))
-        Ainterventions = merge(Aδinterventions, NamedTuple{ts}((Aδs,)))
+        Aδinterventions = merge(Aδinterventions, NamedTuple{ts}((Aδs,)))
     end
 
     LAδinterventions = CausalTables.replacetable(L, merge(gettable(L), Aδinterventions))

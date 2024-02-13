@@ -77,12 +77,14 @@ function intervene_on_data(model_intervention, Os, δ)
 end
 
 function crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
+    dprmodel = DecomposedPropensityRatio(mtp.density_ratio_estimator)
+
     if isnothing(mtp.cv_splitter)
         mach_mean = machine(mtp.mean_estimator, LAs, Y)
-        mach_density = machine(mtp.density_ratio_estimator, Ls, As)
+        mach_density = machine(dprmodel, Ls, As)
     else
         mach_mean = machine(CrossFitModel(mtp.mean_estimator, mtp.cv_splitter), LAs, Y)
-        mach_density = machine(CrossFitModel(mtp.density_ratio_estimator, mtp.cv_splitter), Ls, As)
+        mach_density = machine(CrossFitModel(dprmodel, mtp.cv_splitter), Ls, As)
     end
 
     return mach_mean, mach_density
