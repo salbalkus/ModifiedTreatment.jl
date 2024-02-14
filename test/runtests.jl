@@ -188,7 +188,7 @@ end
 end 
 
 
-@testset "MTP Network" begin
+#@testset "MTP Network" begin
     Random.seed!(1)
     moe = 0.1
 
@@ -218,7 +218,6 @@ end
 
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
-    truth
     @test within(ψ_est.or, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
@@ -227,7 +226,7 @@ end
     # TODO: Add better tests to ensure the bootstrap is working correctly
 
     # Test the cluster bootstrap
-    B = 10
+    B = 100
     clustersampler = ClusterSampler(2)
     ModifiedTreatment.bootstrap!(clustersampler, output, B)  
 
@@ -235,6 +234,7 @@ end
     values(σ2boot_est) .* 10^3
     @test all(values(σ2boot_est) .< moe)
 
+    truth
     # Test graph updating scheme
     data_small = rand(dgp_net, 10^4)
     mtpmach2 = machine(mtp, data_small, intervention) |> fit!
