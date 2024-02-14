@@ -48,7 +48,7 @@ function get_summarized_data(O)
     end
     controlssymbols = getcontrolssymbols(LAs)
 
-    if any(controlssymbols .∈ [values(summarizedvars)])
+    if any(controlssymbols .∈ [keys(summarizedvars)])
         L = replacetable(LAs, TableOperations.select(LAs, controlssymbols..., values(summarizedvars[controlssymbols])...) |> Tables.columntable)
     else
         L = replacetable(LAs, TableOperations.select(LAs, controlssymbols...) |> Tables.columntable)
