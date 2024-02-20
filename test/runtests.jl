@@ -214,12 +214,6 @@ end
     data_large = rand(dgp_net, 10^3)
     intervention = AdditiveShift(0.1)
 
-    G = getgraph(data_large)
-    Y = getresponse(data_large)
-
-    Y' * Y / length(Y)
-    (Y' * adjacency_matrix(G) * Y +  Y' * Y)  / length(Y)^2
-    
     
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
@@ -254,7 +248,6 @@ end
     ModifiedTreatment.bootstrap!(clustersampler, output, B)  
 
     σ2boot_est = σ2boot(output)
-    values(σ2boot_est) .* 10^3
     @test all(values(σ2boot_est) .< moe)
 
     # Test graph updating scheme
