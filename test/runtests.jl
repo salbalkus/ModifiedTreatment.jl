@@ -179,7 +179,13 @@ end
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
-    
+
+    σ2_est = values(σ2(output))
+    @test isnothing(σ2_est[1])
+    @test all(σ2_est[2:end] .< moe)
+
+    @test all(isnothing.(values(σ2boot(output))))
+    @test all(isnothing.(values(σ2net(output))))
 
     # TODO: Add better tests to ensure the bootstrap is working correctly
     B = 10
@@ -222,6 +228,16 @@ end
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
+
+    σ2_est = values(σ2(output))
+    @test isnothing(σ2_est[1])
+    @test all(σ2_est[2:end] .< moe)
+    
+    σ2net_est  = σ2net(output)
+    @test isnothing(σ2_est[1])
+    @test all(σ2_est[2:end] .< moe)
+
+    @test all(isnothing.(values(σ2boot(output))))
     
     # TODO: Add better tests to ensure the bootstrap is working correctly
 
@@ -234,7 +250,6 @@ end
     values(σ2boot_est) .* 10^3
     @test all(values(σ2boot_est) .< moe)
 
-    truth
     # Test graph updating scheme
     data_small = rand(dgp_net, 10^4)
     mtpmach2 = machine(mtp, data_small, intervention) |> fit!
@@ -246,7 +261,8 @@ end
     @test all(values(σ2boot_est) .< moe)
 end
 
-#@testset "Super Learning" begin
+"""
+@testset "Super Learning" begin
 
     dgp = DataGeneratingProcess(
         @dgp(
@@ -257,5 +273,6 @@ end
             Y ~ @. Normal(:A + :L1 * (0.5 * sin(:L2) + 0.1 * :L3)  + 10, 1)
         );
     )
-#end
+end
+"""
 

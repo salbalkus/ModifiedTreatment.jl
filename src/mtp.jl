@@ -8,16 +8,21 @@ end
 MTP(mean_estimator, density_ratio_estimator, cv_splitter) = MTP(mean_estimator, density_ratio_estimator, cv_splitter, 0.95)
 
 function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
+
+    # Throw errors if inputs are invalid
+    check_inputs(mtp, O, Δ)
+
     δ = source(Δ)
     Os = source(O)
 
     Y = getresponse(Os)
+    G = getgraph(Os)
     model_intervention = InterventionModel()
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
 
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
-    outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, Qn, Qδn, Hn, Hshiftn)
+    outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
 
     return (; 
         outcome_regression = outcome_regression_est,
@@ -62,6 +67,15 @@ estimate(machine::Machine, δnew::Intervention) = MTPResult(
 # Define custom function to extract the nuisance estimators from the learning network machine
 nuisance_machines(machine::Machine{MTP}) = MLJBase.unwrap(machine.fitresult).nuisance_machines
 
+function check_inputs(mtp, O::CausalTable, Δ::Intervention)
+
+    # Ensure graph has a node for each data unit
+    g = getgraph(O)
+    if (!isnothing(g)) && (nv(g) != DataAPI.nrow(O)) && (nv(g) > 0)
+        throw(ArgumentError("Graph must have the same number of vertices as the number of rows in the data, or be empty (have 0 vertices)."))
+    end
+end
+
 function intervene_on_data(model_intervention, Os, δ)
     mach_intervention = machine(model_intervention, Os)
 
@@ -104,10 +118,10 @@ function estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs
     return Qn, Qδn, Hn, Hshiftn
 end
 
-function estimate_causal_parameters(Y, Qn, Qδn, Hn, Hshiftn)
-    mach_ipw = machine(IPW(), Y) |> fit!
-    mach_onestep = machine(OneStep(), Y, Qn) |> fit!
-    mach_tmle = machine(TMLE(), Y, Qn) |> fit!
+function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
+    mach_ipw = machine(IPW(), Y, G) |> fit!
+    mach_onestep = machine(OneStep(), Y, Qn, G) |> fit!
+    mach_tmle = machine(TMLE(), Y, Qn, G) |> fit!
 
     outcome_regression_est = outcome_regression_transform(Qδn)
     ipw_est = MMI.transform(mach_ipw, Hn)

@@ -1,4 +1,5 @@
 Estimate = Union{Float64, Nothing}
+Network = Union{Graph, Nothing}
 
 # CausalEstimatorResult objects
 abstract type CausalEstimatorResult end
@@ -12,24 +13,32 @@ OutcomeRegressionResult(ψ) = OutcomeRegressionResult(ψ, nothing)
 mutable struct IPWResult <: CausalEstimatorResult
     ψ::Estimate
     σ2::Estimate
+    σ2net::Estimate
     σ2boot::Estimate
 end
-IPWResult(ψ, σ2) = IPWResult(ψ, σ2, nothing)
+IPWResult(ψ, σ2) = IPWResult(ψ, σ2, nothing, nothing)
+IPWResult(ψ, σ2, σ2net) = IPWResult(ψ, σ2, σ2net, nothing)
+
 
 mutable struct OneStepResult <: CausalEstimatorResult
     ψ::Estimate
     σ2::Estimate
+    σ2net::Estimate
     σ2boot::Estimate
 end
-OneStepResult(ψ, σ2) = OneStepResult(ψ, σ2, nothing)
+OneStepResult(ψ, σ2) = OneStepResult(ψ, σ2, nothing, nothing)
+OneStepResult(ψ, σ2, σ2net) = OneStepResult(ψ, σ2, σ2net, nothing)
+
 
 mutable struct TMLEResult <: CausalEstimatorResult
     ψ::Estimate
     σ2::Estimate
+    σ2net::Estimate
     σ2boot::Estimate
 end
+TMLEResult(ψ, σ2) = TMLEResult(ψ, σ2, nothing, nothing)
+TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
-TMLEResult(ψ, σ2) = TMLEResult(ψ, σ2, nothing)
 
 # functions to compute estimators from nuisance parameters
 
@@ -39,28 +48,39 @@ outcome_regression_transform(Qδn::Vector) = OutcomeRegressionResult(mean(Qδn))
 outcome_regression_transform(Qδn::Node) = node(Qδn -> outcome_regression_transform(Qδn), Qδn)
 
 # define basic estimators
-function ipw(Y::Array, Hn::Array)
+function ipw(Y::Array, Hn::Array, G::Network)
     ψ = mean(Hn .* Y)
-    σ2 = mean(((Hn .* Y) .- ψ).^2) / length(Hn)
-    return IPWResult(ψ, σ2)
+    estimating_function = (Hn .* Y) .- ψ
+    σ2 = mean(estimating_function.^2) / length(Hn)
+    if isnothing(G) || nv(G) == 0
+        return IPWResult(ψ, σ2)
+    else
+        σ2net = estimating_function' * adjacency_matrix(G) * estimating_function / (length(Hn)^2)
+        return IPWResult(ψ, σ2, σ2net)
+    end
 end
 
-function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array)
+function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::Network)
     D = eif(Hn, Y, Qn, Qδn)
     ψ = mean(D)
     σ2 = var(D) / length(D)
-    return OneStepResult(ψ, σ2)
+    if isnothing(G) || nv(G) == 0
+        return OneStepResult(ψ, σ2)
+    else
+        σ2net = D' * adjacency_matrix(G) * D / (length(D)^2)
+        return OneStepResult(ψ, σ2, σ2net)
+    end
 end
 
-function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array)
+function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::Network)
     scaler = StatsBase.fit(UnitRangeTransform, Y, dims = 1)
     Y01 = StatsBase.transform(scaler, Y)
     Qn01 = StatsBase.transform(scaler, Qn)
     bound!(Qn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
-    return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, scaler)
+    return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, G, scaler)
 end
 
-function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, scaler)
+function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::Network, scaler)
     fit_data = MLJBase.table(hcat(Y01, Hn), names = ["Y", "Hn"])
     # Fit the logistic regression model
     # The 0 + is needed to fit the model with an intercept of 0
@@ -77,7 +97,12 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     # Estimate variance
     D = eif(Hn, Y, Qn, Qδn)
     σ2 = var(D) / length(D)
-    return TMLEResult(ψ, σ2)
+    if isnothing(G) || nv(G) == 0
+        return TMLEResult(ψ, σ2)
+    else
+        σ2net = D' * adjacency_matrix(G) * D / (length(D)^2)
+        return TMLEResult(ψ, σ2, σ2net)
+    end
 end
 
 # Define MLJ-type estimaator machines for the learning network
@@ -85,25 +110,25 @@ end
 abstract type CausalEstimator <: MMI.Unsupervised end
 
 mutable struct IPW <: CausalEstimator end
-MMI.fit(::IPW, verbosity, Y) = (fitresult = (; Y = Y), cache = nothing, report = nothing)
-MMI.transform(::IPW, fitresult, Hn) = ipw(fitresult.Y, Hn)
+MMI.fit(::IPW, verbosity, Y, G) = (fitresult = (; Y = Y, G = G), cache = nothing, report = nothing)
+MMI.transform(::IPW, fitresult, Hn) = ipw(fitresult.Y, Hn, fitresult.G)
 
 
 mutable struct OneStep <: CausalEstimator end
-MMI.fit(::OneStep, verbosity, Y, Qn) = (fitresult = (; Y = Y, Qn = Qn), cache = nothing, report = nothing)
-MMI.transform(::OneStep, fitresult, Qδn, Hn) = onestep(fitresult.Y, fitresult.Qn, Qδn, Hn)
+MMI.fit(::OneStep, verbosity, Y, Qn, G) = (fitresult = (; Y = Y, Qn = Qn, G = G), cache = nothing, report = nothing)
+MMI.transform(::OneStep, fitresult, Qδn, Hn) = onestep(fitresult.Y, fitresult.Qn, Qδn, Hn, fitresult.G)
 
 mutable struct TMLE <: CausalEstimator end
 
-function MMI.fit(::TMLE, verbosity, Y, Qn)
+function MMI.fit(::TMLE, verbosity, Y, Qn, G)
     scaler = StatsBase.fit(UnitRangeTransform, Y, dims = 1)
     Y01 = StatsBase.transform(scaler, Y)
     Qn01 = StatsBase.transform(scaler, Qn)
     bound!(Qn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
-    (fitresult = (; Y = Y, Qn = Qn, Y01 = Y01, Qn01 = Qn01, scaler = scaler), cache = nothing, report = nothing)
+    (fitresult = (; Y = Y, Qn = Qn, Y01 = Y01, Qn01 = Qn01, G = G, scaler = scaler), cache = nothing, report = nothing)
 end
 
-MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn) = tmle_fromscaled(fitresult.Y, fitresult.Qn, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.scaler)
+MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn) = tmle_fromscaled(fitresult.Y, fitresult.Qn, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.G, fitresult.scaler)
 
 mutable struct MultiplierBootstrap <: CausalEstimator 
     B::Int
@@ -152,7 +177,7 @@ function σ2(x::MTPResult)
     if typeof(est) == CausalEstimatorResult
         return est.σ2
     else
-        return map(e -> e.σ2, est)
+        return map(e -> hasproperty(e, :σ2) ? e.σ2 : nothing, est)
     end
 end
 function σ2boot(x::MTPResult)
@@ -160,7 +185,15 @@ function σ2boot(x::MTPResult)
     if typeof(est) == CausalEstimatorResult
         return est.σ2boot
     else
-        return map(e -> e.σ2boot, est)
+        return map(e -> hasproperty(e, :σ2boot) ?  e.σ2boot : nothing, est)
+    end
+end
+function σ2net(x::MTPResult)
+    est = getestimate(x)
+    if typeof(est) == CausalEstimatorResult
+        return est.σ2net
+    else
+        return map(e -> hasproperty(e, :σ2net) ?  e.σ2net : nothing, est)
     end
 end
 

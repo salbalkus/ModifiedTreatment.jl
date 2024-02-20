@@ -30,6 +30,7 @@ end
 function bootstrap_sample(mtpresult::MTPResult, sampler::BootstrapSampler, mach_Qn, mach_Hn, O::CausalTable, types::Vector{DataType})
     O_sample = bootstrap(sampler, O)
     Y = getresponse(O_sample)
+    G = getgraph(O_sample)
     LAs, LAδ, dAδ, LAδinv, dAδinv = get_summarized_intervened_data(O_sample, mtpresult, types)
 
     # Get Conditional Mean
@@ -55,15 +56,15 @@ function bootstrap_sample(mtpresult::MTPResult, sampler::BootstrapSampler, mach_
     end
     
     # Compute the causal estimates based on nuisance parameters
-    nuisance_tuple = (Y, Qn, Qδn, Hn, Hshiftn)
+    nuisance_tuple = (Y, G, Qn, Qδn, Hn, Hshiftn)
     return [estimate(val, nuisance_tuple).ψ for val in values(getestimate(mtpresult))]
 end
 
 # Dispatch on the type of estimator we want to use
-estimate(::OutcomeRegressionResult, nuisances) = outcome_regression_transform(nuisances[3])
-estimate(::IPWResult, nuisances) = ipw(nuisances[1], nuisances[4])
-estimate(::OneStepResult, nuisances) = onestep(nuisances[1], nuisances[2], nuisances[3], nuisances[4])
-estimate(::TMLEResult, nuisances) = tmle(nuisances[1], nuisances[2], nuisances[3], nuisances[4], nuisances[5])
+estimate(::OutcomeRegressionResult, nuisances) = outcome_regression_transform(nuisances[4])
+estimate(::IPWResult, nuisances) = ipw(nuisances[1], nuisances[5], nuisances[2])
+estimate(::OneStepResult, nuisances) = onestep(nuisances[1], nuisances[3], nuisances[4], nuisances[5], nuisances[2])
+estimate(::TMLEResult, nuisances) = tmle(nuisances[1], nuisances[3], nuisances[4], nuisances[5], nuisances[6], nuisances[2])
 
 # Functions to determine which types of estimator needs which nuisance parameter
 needs_conditional_mean(types) = OutcomeRegressionResult ∈ types || OneStepResult ∈ types || TMLEResult ∈ types
