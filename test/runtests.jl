@@ -188,7 +188,7 @@ end
 end 
 
 
-#@testset "MTP Network" begin
+@testset "MTP Network" begin
     Random.seed!(1)
     moe = 0.1
 

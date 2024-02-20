@@ -40,8 +40,8 @@ outcome_regression_transform(Qδn::Node) = node(Qδn -> outcome_regression_trans
 
 # define basic estimators
 function ipw(Y::Array, Hn::Array)
-    ψ = sum(Hn .* Y) / sum(Hn)
-    σ2 = var(Hn .* (Y .- ψ)) / length(Hn)
+    ψ = mean(Hn .* Y)
+    σ2 = mean(((Hn .* Y) .- ψ).^2) / length(Hn)
     return IPWResult(ψ, σ2)
 end
 
