@@ -55,7 +55,7 @@ function ipw(Y::Array, Hn::Array, G::Network)
     if isnothing(G) || nv(G) == 0
         return IPWResult(ψ, σ2)
     else
-        σ2net = estimating_function' * adjacency_matrix(G) * estimating_function / (length(Hn)^2)
+        σ2net = (estimating_function' * adjacency_matrix(G) * estimating_function) + (estimating_function' * estimating_function) / (length(Hn)^2)
         return IPWResult(ψ, σ2, σ2net)
     end
 end
@@ -67,7 +67,7 @@ function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::Network)
     if isnothing(G) || nv(G) == 0
         return OneStepResult(ψ, σ2)
     else
-        σ2net = D' * adjacency_matrix(G) * D / (length(D)^2)
+        σ2net = (D' * adjacency_matrix(G) * D)  + (D' * D) / (length(D)^2)
         return OneStepResult(ψ, σ2, σ2net)
     end
 end
@@ -100,7 +100,7 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     if isnothing(G) || nv(G) == 0
         return TMLEResult(ψ, σ2)
     else
-        σ2net = D' * adjacency_matrix(G) * D / (length(D)^2)
+        σ2net = (D' * adjacency_matrix(G) * D) + (D' * D) / (length(D)^2)
         return TMLEResult(ψ, σ2, σ2net)
     end
 end

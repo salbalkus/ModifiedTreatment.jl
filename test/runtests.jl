@@ -194,7 +194,7 @@ end
 end 
 
 
-@testset "MTP Network" begin
+#@testset "MTP Network" begin
     Random.seed!(1)
     moe = 0.1
 
@@ -213,6 +213,13 @@ end
     data_vlarge = rand(dgp_net, 10^6)
     data_large = rand(dgp_net, 10^3)
     intervention = AdditiveShift(0.1)
+
+    G = getgraph(data_large)
+    Y = getresponse(data_large)
+
+    Y' * Y / length(Y)
+    (Y' * adjacency_matrix(G) * Y +  Y' * Y)  / length(Y)^2
+    
     
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
