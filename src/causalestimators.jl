@@ -49,13 +49,16 @@ outcome_regression_transform(Qδn::Node) = node(Qδn -> outcome_regression_trans
 
 # define basic estimators
 function ipw(Y::Array, Hn::Array, G::Network)
+
     ψ = mean(Hn .* Y)
     estimating_function = (Hn .* Y) .- ψ
-    σ2 = mean(estimating_function.^2) / length(Hn)
+
+    σ2 = var(estimating_function)
+
     if isnothing(G) || nv(G) == 0
         return IPWResult(ψ, σ2)
     else
-        σ2net = ((estimating_function' * adjacency_matrix(G) * estimating_function) + (estimating_function' * estimating_function)) / (length(Hn)^3)
+        σ2net = ((estimating_function' * adjacency_matrix(G) * estimating_function) + (estimating_function' * estimating_function)) / (length(Hn)^2)
         return IPWResult(ψ, σ2, σ2net)
     end
 end
@@ -63,11 +66,12 @@ end
 function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::Network)
     D = eif(Hn, Y, Qn, Qδn)
     ψ = mean(D)
-    σ2 = var(D) / length(D)
+    D = D .- ψ
+    σ2 = mean(D.^2) / length(D)
     if isnothing(G) || nv(G) == 0
         return OneStepResult(ψ, σ2)
     else
-        σ2net = ((D' * adjacency_matrix(G) * D)  + (D' * D)) / (length(D)^3)
+        σ2net = ((D' * adjacency_matrix(G) * D)  + (D' * D)) / (length(D)^2)
         return OneStepResult(ψ, σ2, σ2net)
     end
 end
@@ -95,12 +99,12 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     ψ = mean(Qstar)
 
     # Estimate variance
-    D = eif(Hn, Y, Qn, Qδn)
-    σ2 = var(D) / length(D)
+    D = eif(Hn, Y, Qn, Qδn) .- ψ
+    σ2 = mean(D.^2) / length(D)
     if isnothing(G) || nv(G) == 0
         return TMLEResult(ψ, σ2)
     else
-        σ2net = ((D' * adjacency_matrix(G) * D) + (D' * D)) / (length(D)^3)
+        σ2net = ((D' * adjacency_matrix(G) * D) + (D' * D)) / (length(D)^2)
         return TMLEResult(ψ, σ2, σ2net)
     end
 end

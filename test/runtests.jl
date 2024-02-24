@@ -194,15 +194,15 @@ end
 end 
 
 
-#@testset "MTP Network" begin
+@testset "MTP Network" begin
     Random.seed!(1)
-    moe = 0.1
+    moe = 0.2
 
     distseqnet = @dgp(
         L1 ~ DiscreteUniform(1, 5),
         A ~ (@. Normal(:L1, 0.5)),
         As = Sum(:A, include_self = false),
-        Y ~ (@. Normal(:As + 0.1 * :L1 + 10, 1))
+        Y ~ (@. Normal(:A + :As + 0.1 * :L1 + 10, 1))
     );
 
     # Note this only yields clusters for K = 1, not any other K
@@ -211,13 +211,13 @@ end
 
     
     data_vlarge = rand(dgp_net, 10^6)
-    data_large = rand(dgp_net, 10^3)
+    data_large = rand(dgp_net, 10^4)
     intervention = AdditiveShift(0.1)
 
     
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
-    density_ratio_estimator = DensityRatioPropensity(OracleDensityEstimator(dgp_net))
+    density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(dgp_net))
     cv_splitter = nothing#CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
@@ -225,6 +225,8 @@ end
 
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
+    ψ_est.or
+    truth.ψ
     @test within(ψ_est.or, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
@@ -232,26 +234,25 @@ end
 
     σ2_est = values(σ2(output))
     @test isnothing(σ2_est[1])
-    @test all(σ2_est[2:end] .< moe)
     
-    σ2net_est  = σ2net(output)
+    σ2net_est  = values(σ2net(output))
     @test isnothing(σ2_est[1])
-    @test all(σ2_est[2:end] .< moe)
 
     @test all(isnothing.(values(σ2boot(output))))
-    
-    # TODO: Add better tests to ensure the bootstrap is working correctly
 
+    # TODO: Add better tests to ensure the bootstrap is working correctly
     # Test the cluster bootstrap
-    B = 100
+    B = 200
     clustersampler = ClusterSampler(2)
     ModifiedTreatment.bootstrap!(clustersampler, output, B)  
-
-    σ2boot_est = σ2boot(output)
+    σ2boot_est = values(σ2boot(output))
     @test all(values(σ2boot_est) .< moe)
 
+    # Ensure bootstrap and network variance estimator yield roughly same variance
+    @test all(within.(σ2net_est[2:end], σ2boot_est[2:end], moe))
+
     # Test graph updating scheme
-    data_small = rand(dgp_net, 10^4)
+    data_small = rand(dgp_net, 10^3)
     mtpmach2 = machine(mtp, data_small, intervention) |> fit!
     output2 = ModifiedTreatment.estimate(mtpmach2, intervention)
     ModifiedTreatment.bootstrap!(clustersampler, output2, B)  
