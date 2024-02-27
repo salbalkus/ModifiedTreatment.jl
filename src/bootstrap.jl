@@ -30,7 +30,7 @@ end
 function bootstrap_sample(mtpresult::MTPResult, sampler::BootstrapSampler, mach_Qn, mach_Hn, O::CausalTable, types::Vector{DataType})
     O_sample = bootstrap(sampler, O)
     Y = getresponse(O_sample)
-    G = getgraph(O_sample)
+    G = get_dependency_neighborhood(getgraph(O_sample))
     LAs, LAδ, dAδ, LAδinv, dAδinv = get_summarized_intervened_data(O_sample, mtpresult, types)
 
     # Get Conditional Mean

@@ -75,15 +75,15 @@ function get_dependency_neighborhood(g::Network)
     
     A = adjacency_matrix(g)
 
-    # get the nodes within two-hops of the adjacency matrix
-    twohops = [dijkstra_shortest_paths(g, i, maxdist = 2).dists .== 2 for i in 1:nv(g)]
-    # connect the nodes within two hops to form dependency neighborhood
-    for (i, v) in enumerate(twohops)
-        A[i, v] .= 1
-        A[v, i] .= 1
-    end
-    # construct graph from the new adjacency matrix
-    return Graph(A)
+    # get the nodes within two-hops of the adjacency matrix,
+    # add them to the original,
+    # and return edge weights to 1
+    Anew = ((A .+ (A * A)) .> 0)
+
+    # directly return the adjacency matrix
+    # WARNING: If a graph is constructed from this output, the 1-diagonal will be converted to a 0-diagonal
+    # and subsequently matrix multiplications may be incorrect if a 1-diagonal was assumed
+    return Anew
 end
 get_dependency_neighborhood(g::Node) = node(g -> get_dependency_neighborhood(g), g)
 

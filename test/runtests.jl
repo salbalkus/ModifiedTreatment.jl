@@ -214,7 +214,6 @@ end
     data_vlarge = rand(dgp_net, 10^6)
     data_large = rand(dgp_net, 10^4)
     intervention = AdditiveShift(0.1)
-
     
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()

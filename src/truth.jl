@@ -28,13 +28,14 @@ function compute_true_MTP(dgp, data, intervention; direction = :out, controls_ii
 
     # Compute the EIF and get g-computation result
     ψ = mean(Q0bar_shift)
-    eif_shift = Hn_aux .* (Y .- Q0bar_noshift) .+ (Q0bar_shift .- ψ)
+    D = Hn_aux .* (Y .- Q0bar_noshift) .+ (Q0bar_shift .- ψ)
 
     if controls_iid
         if nv(getgraph(data)) == 0 # if graph is empty, just use empirical variance
-            eff_bound = var(eif_shift)
+            eff_bound = var(D)
         else # if graph exists, use estimator from Ogburn 2022
-            eff_bound = (sum(eif_shift.^2) + (transpose(eif_shift) * adjacency_matrix(getgraph(data); dir = direction) * eif_shift)) / length(eif_shift)
+            G = get_dependency_neighborhood(getgraph(data))
+            eff_bound = matrixvar(D, G)
         end
     else
         error("Non-iid efficiency bound not yet implemented.")

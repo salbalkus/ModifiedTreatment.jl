@@ -47,35 +47,35 @@ outcome_regression_transform(Qδn::Vector) = OutcomeRegressionResult(mean(Qδn))
 outcome_regression_transform(Qδn::Node) = node(Qδn -> outcome_regression_transform(Qδn), Qδn)
 
 # define basic estimators
-function ipw(Y::Array, Hn::Array, G::Network)
+function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
 
     ψ = mean(Hn .* Y)
     estimating_function = (Hn .* Y) .- ψ
 
     σ2 = var(estimating_function)
 
-    if isnothing(G) || nv(G) == 0
+    if isnothing(G) || size(G, 1) == 0
         return IPWResult(ψ, σ2)
     else
-        σ2net = ((estimating_function' * adjacency_matrix(G) * estimating_function) + (estimating_function' * estimating_function)) / (length(Hn)^2)
+        σ2net = matrixvar(estimating_function, G) / length(estimating_function)
         return IPWResult(ψ, σ2, σ2net)
     end
 end
 
-function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::Network)
+function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
     D = eif(Hn, Y, Qn, Qδn)
     ψ = mean(D)
     D = D .- ψ
     σ2 = mean(D.^2) / length(D)
-    if isnothing(G) || nv(G) == 0
+    if isnothing(G) || size(G, 1) == 0
         return OneStepResult(ψ, σ2)
     else
-        σ2net = ((D' * adjacency_matrix(G) * D)  + (D' * D)) / (length(D)^2)
+        σ2net = matrixvar(D, G) / length(D)
         return OneStepResult(ψ, σ2, σ2net)
     end
 end
 
-function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::Network)
+function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::AbstractMatrix)
     scaler = StatsBase.fit(UnitRangeTransform, Y, dims = 1)
     Y01 = StatsBase.transform(scaler, Y)
     Qn01 = StatsBase.transform(scaler, Qn)
@@ -83,7 +83,7 @@ function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::Ne
     return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, G, scaler)
 end
 
-function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::Network, scaler)
+function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::AbstractMatrix, scaler)
     fit_data = MLJBase.table(hcat(Y01, Hn), names = ["Y", "Hn"])
     # Fit the logistic regression model
     # The 0 + is needed to fit the model with an intercept of 0
@@ -100,10 +100,10 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     # Estimate variance
     D = eif(Hn, Y, Qn, Qδn) .- ψ
     σ2 = mean(D.^2) / length(D)
-    if isnothing(G) || nv(G) == 0
+    if isnothing(G) || size(G, 1) == 0
         return TMLEResult(ψ, σ2)
     else
-        σ2net = ((D' * adjacency_matrix(G) * D) + (D' * D)) / (length(D)^2)
+        σ2net = matrixvar(D, G) / length(D)
         return TMLEResult(ψ, σ2, σ2net)
     end
 end
