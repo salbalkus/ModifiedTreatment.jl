@@ -195,7 +195,6 @@ end
     @test all(values(σ2boot(output)) .< moe)
 end 
 
-
 @testset "MTP Network" begin
     Random.seed!(1)
     moe = 0.2
