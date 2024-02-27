@@ -1,5 +1,4 @@
-Estimate = Union{Float64, Nothing}
-Network = Union{Graph, Nothing}
+
 
 # CausalEstimatorResult objects
 abstract type CausalEstimatorResult end

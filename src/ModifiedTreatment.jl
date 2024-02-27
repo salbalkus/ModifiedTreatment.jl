@@ -20,6 +20,10 @@ module ModifiedTreatment
     const MMI = MLJModelInterface
     const MT = MLJTuning
 
+    # Define custom types
+    Estimate = Union{Float64, Nothing}
+    Network = Union{Graph, Nothing}
+
     include("nodeutils.jl")
     export gettreatment, getresponse, getgraph, getsummaries, summarize
     export merge, getindex, iterate, length

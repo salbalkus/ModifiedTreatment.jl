@@ -16,7 +16,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     Os = source(O)
 
     Y = getresponse(Os)
-    G = getgraph(Os)
+    G = get_dependency_neighborhood(getgraph(Os))
     model_intervention = InterventionModel()
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
@@ -66,6 +66,26 @@ estimate(machine::Machine, δnew::Intervention) = MTPResult(
 
 # Define custom function to extract the nuisance estimators from the learning network machine
 nuisance_machines(machine::Machine{MTP}) = MLJBase.unwrap(machine.fitresult).nuisance_machines
+
+function get_dependency_neighborhood(g::Network)
+    # Only compute if a graph is passed in
+    if isnothing(g)
+        return nothing
+    end
+    
+    A = adjacency_matrix(g)
+
+    # get the nodes within two-hops of the adjacency matrix
+    twohops = [dijkstra_shortest_paths(g, i, maxdist = 2).dists .== 2 for i in 1:nv(g)]
+    # connect the nodes within two hops to form dependency neighborhood
+    for (i, v) in enumerate(twohops)
+        A[i, v] .= 1
+        A[v, i] .= 1
+    end
+    # construct graph from the new adjacency matrix
+    return Graph(A)
+end
+get_dependency_neighborhood(g::Node) = node(g -> get_dependency_neighborhood(g), g)
 
 function check_inputs(mtp, O::CausalTable, Δ::Intervention)
 
