@@ -19,9 +19,15 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     G = get_dependency_neighborhood(getgraph(Os))
     model_intervention = InterventionModel()
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
+    
+    # Fit and estimate nuisance parameters
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
-
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
+
+    # Stabilize the weights
+    Hn = node(Hn -> Hn ./ mean(Hn), Hn)
+
+    # Get causal estimates
     outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
 
     return (; 
