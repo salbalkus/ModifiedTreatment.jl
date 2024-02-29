@@ -54,13 +54,13 @@ function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
     Hns = Hn ./ weight_sum
     ψ = sum(Hns .* Y)
 
-    estimating_function = (Hns .* Y) .- ψ
-    σ2 = (estimating_function' * estimating_function) / (weight_sum^2)
+    estimating_function = (Hn .* Y) .- ψ
+    σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || size(G, 1) == 0
         return IPWResult(ψ, σ2)
     else
-        σ2net = cov_unscaled(estimating_function, G) / (weight_sum^2)
+        σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
         return IPWResult(ψ, σ2, σ2net)
     end
 end
