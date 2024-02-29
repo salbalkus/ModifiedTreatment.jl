@@ -16,7 +16,7 @@ function bound!(X::Vector; lower = -Inf, upper = Inf)
     X[X .< lower] .= lower
 end
 
-matrixvar(x::Vector, G::AbstractMatrix) = (transpose(x) * G * x) / length(x)
+cov_unscaled(x::Vector, G::AbstractMatrix) = (transpose(x) * G * x)
 
 
 

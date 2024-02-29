@@ -55,12 +55,12 @@ function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
     ψ = sum(Hns .* Y)
 
     estimating_function = (Hns .* Y) .- ψ
-    σ2 = mean(estimating_function' * estimating_function) / weight_sum
+    σ2 = (estimating_function' * estimating_function) / (weight_sum^2)
 
     if isnothing(G) || size(G, 1) == 0
         return IPWResult(ψ, σ2)
     else
-        σ2net = matrixvar(estimating_function, G) / weight_sum
+        σ2net = cov_unscaled(estimating_function, G) / (weight_sum^2)
         return IPWResult(ψ, σ2, σ2net)
     end
 end
@@ -73,7 +73,7 @@ function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
     if isnothing(G) || size(G, 1) == 0
         return OneStepResult(ψ, σ2)
     else
-        σ2net = matrixvar(D, G) / length(D)
+        σ2net = cov_unscaled(D, G) / (length(D)^2)
         return OneStepResult(ψ, σ2, σ2net)
     end
 end
@@ -106,7 +106,7 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     if isnothing(G) || size(G, 1) == 0
         return TMLEResult(ψ, σ2)
     else
-        σ2net = matrixvar(D, G) / length(D)
+        σ2net = cov_unscaled(D, G) / (length(D)^2)
         return TMLEResult(ψ, σ2, σ2net)
     end
 end

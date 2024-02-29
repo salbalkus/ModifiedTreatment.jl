@@ -35,7 +35,7 @@ function compute_true_MTP(dgp, data, intervention; direction = :out, controls_ii
             eff_bound = var(D)
         else # if graph exists, use estimator from Ogburn 2022
             G = get_dependency_neighborhood(getgraph(data))
-            eff_bound = matrixvar(D, G)
+            eff_bound = cov_unscaled(D, G) / length(D)
         end
     else
         error("Non-iid efficiency bound not yet implemented.")
