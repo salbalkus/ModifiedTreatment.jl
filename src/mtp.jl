@@ -25,11 +25,12 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
 
     # Get causal estimates
-    plugin_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
+    plugin_est, ipw_est, sipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
 
     return (; 
         plugin = plugin_est,
         ipw = ipw_est,
+        sipw = sipw_est,
         onestep = onestep_est,
         tmle = tmle_est,
         report = (; 
@@ -60,6 +61,7 @@ tmle(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult)
 estimate(machine::Machine, δnew::Intervention) = MTPResult(
     (plugin = MLJBase.unwrap(machine.fitresult).plugin(δnew),
      ipw = MLJBase.unwrap(machine.fitresult).ipw(δnew),
+     sipw = MLJBase.unwrap(machine.fitresult).sipw(δnew),
      onestep = MLJBase.unwrap(machine.fitresult).onestep(δnew),
      tmle = MLJBase.unwrap(machine.fitresult).tmle(δnew)
     ),
@@ -147,10 +149,11 @@ function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
     mach_tmle = machine(TMLE(), Y, Qn, G) |> fit!
 
     plugin_est = plugin_transform(Qδn)
-    ipw_est = MMI.transform(mach_ipw, Hn)
+    ipw_est = node(Hn -> MMI.transform(mach_ipw, Hn, false), Hn)
+    sipw_est =  node(Hn -> MMI.transform(mach_ipw, Hn, true), Hn)
     onestep_est = MMI.transform(mach_onestep, Qδn, Hn)
     tmle_est = MMI.transform(mach_tmle, Qδn, Hn, Hshiftn)
 
-    return plugin_est, ipw_est, onestep_est, tmle_est
+    return plugin_est, ipw_est, sipw_est, onestep_est, tmle_est
 end
 

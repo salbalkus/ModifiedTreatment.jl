@@ -19,6 +19,7 @@ IPWResult(ψ, σ2) = IPWResult(ψ, σ2, nothing, nothing)
 IPWResult(ψ, σ2, σ2net) = IPWResult(ψ, σ2, σ2net, nothing)
 
 
+
 mutable struct OneStepResult <: CausalEstimatorResult
     ψ::Estimate
     σ2::Estimate
@@ -49,12 +50,23 @@ plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 # define basic estimators
 function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
 
-    # use stabilized point estimate
-    ψ = mean((Hn ./ mean(Hn)) .* Y) 
+    ψ = mean(Hn .* Y)
+    estimating_function = (Hn .* Y) .- ψ
+    σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
-    # use non-stabilized variance estimate
-    estimating_function = (Hn .* Y)
-    estimating_function = estimating_function .- mean(estimating_function)
+    if isnothing(G) || size(G, 1) == 0
+        return IPWResult(ψ, σ2)
+    else
+        σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
+        return IPWResult(ψ, σ2, σ2net)
+    end
+end
+
+function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
+    weight_mean = mean(Hn)
+    estimating_function_uncentered = (Hn .* Y) ./ weight_mean
+    ψ = mean(estimating_function_uncentered)
+    estimating_function = estimating_function_uncentered .- ψ
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || size(G, 1) == 0
@@ -117,7 +129,7 @@ abstract type CausalEstimator <: MMI.Unsupervised end
 
 mutable struct IPW <: CausalEstimator end
 MMI.fit(::IPW, verbosity, Y, G) = (fitresult = (; Y = Y, G = G), cache = nothing, report = nothing)
-MMI.transform(::IPW, fitresult, Hn) = ipw(fitresult.Y, Hn, fitresult.G)
+MMI.transform(::IPW, fitresult, Hn, stabilized) = stabilized ? sipw(fitresult.Y, Hn, fitresult.G) : ipw(fitresult.Y, Hn, fitresult.G)
 
 
 mutable struct OneStep <: CausalEstimator end
