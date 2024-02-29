@@ -50,12 +50,11 @@ plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
 
     # stabilize the weights
-    #weight_sum = sum(Hn)
-    #Hns = Hn ./ weight_sum
-    #ψ = sum(Hns .* Y)
+    weight_sum = sum(Hn)
+    Hns = Hn ./ weight_sum
+    ψ = sum(Hns .* Y)
 
-    ψ = mean(Hn .* Y)
-    estimating_function = (Hn .* Y) .- ψ
+    estimating_function = (Hns .* Y) .- ψ
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || size(G, 1) == 0
