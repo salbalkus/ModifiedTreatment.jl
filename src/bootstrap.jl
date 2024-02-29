@@ -62,7 +62,7 @@ end
 
 # Dispatch on the type of estimator we want to use
 estimate(::PlugInResult, nuisances) = plugin_transform(nuisances[4])
-estimate(::IPWResult, nuisances) = ipw(nuisances[1], nuisances[5], nuisances[2])
+estimate(r::IPWResult, nuisances) = r.stabilized ? sipw(nuisances[1], nuisances[5], nuisances[2]) : ipw(nuisances[1], nuisances[5], nuisances[2])
 estimate(::OneStepResult, nuisances) = onestep(nuisances[1], nuisances[3], nuisances[4], nuisances[5], nuisances[2])
 estimate(::TMLEResult, nuisances) = tmle(nuisances[1], nuisances[3], nuisances[4], nuisances[5], nuisances[6], nuisances[2])
 

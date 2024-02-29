@@ -192,6 +192,7 @@ end
     # TODO: Add better tests to ensure the bootstrap is working correctly
     B = 10
     ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
+    output
     @test all(values(σ2boot(output)) .< moe)
 end 
 

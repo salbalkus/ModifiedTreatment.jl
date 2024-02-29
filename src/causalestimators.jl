@@ -14,9 +14,10 @@ mutable struct IPWResult <: CausalEstimatorResult
     σ2::Estimate
     σ2net::Estimate
     σ2boot::Estimate
+    stabilized::Bool
 end
-IPWResult(ψ, σ2) = IPWResult(ψ, σ2, nothing, nothing)
-IPWResult(ψ, σ2, σ2net) = IPWResult(ψ, σ2, σ2net, nothing)
+IPWResult(ψ, σ2, stabilized) = IPWResult(ψ, σ2, nothing, nothing, stabilized)
+IPWResult(ψ, σ2, σ2net, stabilized) = IPWResult(ψ, σ2, σ2net, nothing, stabilized)
 
 
 
@@ -55,10 +56,10 @@ function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || size(G, 1) == 0
-        return IPWResult(ψ, σ2)
+        return IPWResult(ψ, σ2, false)
     else
         σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
-        return IPWResult(ψ, σ2, σ2net)
+        return IPWResult(ψ, σ2, σ2net, false)
     end
 end
 
@@ -70,10 +71,10 @@ function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || size(G, 1) == 0
-        return IPWResult(ψ, σ2)
+        return IPWResult(ψ, σ2, true)
     else
         σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
-        return IPWResult(ψ, σ2, σ2net)
+        return IPWResult(ψ, σ2, σ2net, true)
     end
 end
 
