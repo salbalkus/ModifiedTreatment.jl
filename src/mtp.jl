@@ -24,14 +24,11 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
 
-    # Stabilize the weights
-    Hn = node(Hn -> Hn ./ mean(Hn), Hn)
-
     # Get causal estimates
-    outcome_regression_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
+    plugin_est, ipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
 
     return (; 
-        outcome_regression = outcome_regression_est,
+        plugin = plugin_est,
         ipw = ipw_est,
         onestep = onestep_est,
         tmle = tmle_est,
@@ -55,13 +52,13 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
 end
 
 # Define custom functions akin to `predict` that yield the result of each estimation strategy from a learning network machine
-outcome_regression(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).outcome_regression(δnew), machine, δnew)
+plugin(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).plugin(δnew), machine, δnew)
 ipw(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).ipw(δnew), machine, δnew)
 onestep(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).onestep(δnew), machine, δnew)
 tmle(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult).tmle(δnew), machine, δnew)
 
 estimate(machine::Machine, δnew::Intervention) = MTPResult(
-    (or = MLJBase.unwrap(machine.fitresult).outcome_regression(δnew),
+    (plugin = MLJBase.unwrap(machine.fitresult).plugin(δnew),
      ipw = MLJBase.unwrap(machine.fitresult).ipw(δnew),
      onestep = MLJBase.unwrap(machine.fitresult).onestep(δnew),
      tmle = MLJBase.unwrap(machine.fitresult).tmle(δnew)
@@ -149,11 +146,11 @@ function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
     mach_onestep = machine(OneStep(), Y, Qn, G) |> fit!
     mach_tmle = machine(TMLE(), Y, Qn, G) |> fit!
 
-    outcome_regression_est = outcome_regression_transform(Qδn)
+    plugin_est = plugin_transform(Qδn)
     ipw_est = MMI.transform(mach_ipw, Hn)
     onestep_est = MMI.transform(mach_onestep, Qδn, Hn)
     tmle_est = MMI.transform(mach_tmle, Qδn, Hn, Hshiftn)
 
-    return outcome_regression_est, ipw_est, onestep_est, tmle_est
+    return plugin_est, ipw_est, onestep_est, tmle_est
 end
 

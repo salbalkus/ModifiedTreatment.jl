@@ -3,11 +3,11 @@
 # CausalEstimatorResult objects
 abstract type CausalEstimatorResult end
 
-mutable struct OutcomeRegressionResult <: CausalEstimatorResult
+mutable struct PlugInResult <: CausalEstimatorResult
     ψ::Estimate
     σ2boot::Estimate
 end
-OutcomeRegressionResult(ψ) = OutcomeRegressionResult(ψ, nothing)
+PlugInResult(ψ) = PlugInResult(ψ, nothing)
 
 mutable struct IPWResult <: CausalEstimatorResult
     ψ::Estimate
@@ -43,21 +43,24 @@ TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
 eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
 
-outcome_regression_transform(Qδn::Vector) = OutcomeRegressionResult(mean(Qδn))
-outcome_regression_transform(Qδn::Node) = node(Qδn -> outcome_regression_transform(Qδn), Qδn)
+plugin_transform(Qδn::Vector) = PlugInResult(mean(Qδn))
+plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 
 # define basic estimators
 function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
 
-    ψ = mean(Hn .* Y)
-    estimating_function = (Hn .* Y) .- ψ
+    # stabilize the weights
+    weight_sum = sum(Hn)
+    Hns = Hn ./ weight_sum
+    ψ = sum(Hns .* Y)
 
-    σ2 = var(estimating_function)
+    estimating_function = (Hns .* Y) .- ψ
+    σ2 = mean(estimating_function' * estimating_function) / weight_sum
 
     if isnothing(G) || size(G, 1) == 0
         return IPWResult(ψ, σ2)
     else
-        σ2net = matrixvar(estimating_function, G) / length(estimating_function)
+        σ2net = matrixvar(estimating_function, G) / weight_sum
         return IPWResult(ψ, σ2, σ2net)
     end
 end

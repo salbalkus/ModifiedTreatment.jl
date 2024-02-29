@@ -177,7 +177,7 @@ end
     
     ψ_est = ψ(output)
 
-    @test within(ψ_est.or, truth.ψ, moe)
+    @test within(ψ_est.plugin, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
@@ -226,7 +226,7 @@ end
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
 
-    @test within(ψ_est.or, truth.ψ, moe)
+    @test within(ψ_est.plugin, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)

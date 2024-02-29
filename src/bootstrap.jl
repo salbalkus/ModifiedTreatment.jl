@@ -61,13 +61,13 @@ function bootstrap_sample(mtpresult::MTPResult, sampler::BootstrapSampler, mach_
 end
 
 # Dispatch on the type of estimator we want to use
-estimate(::OutcomeRegressionResult, nuisances) = outcome_regression_transform(nuisances[4])
+estimate(::PlugInResult, nuisances) = plugin_transform(nuisances[4])
 estimate(::IPWResult, nuisances) = ipw(nuisances[1], nuisances[5], nuisances[2])
 estimate(::OneStepResult, nuisances) = onestep(nuisances[1], nuisances[3], nuisances[4], nuisances[5], nuisances[2])
 estimate(::TMLEResult, nuisances) = tmle(nuisances[1], nuisances[3], nuisances[4], nuisances[5], nuisances[6], nuisances[2])
 
 # Functions to determine which types of estimator needs which nuisance parameter
-needs_conditional_mean(types) = OutcomeRegressionResult ∈ types || OneStepResult ∈ types || TMLEResult ∈ types
+needs_conditional_mean(types) = PlugInResult ∈ types || OneStepResult ∈ types || TMLEResult ∈ types
 needs_propensity(types) = IPWResult ∈ types || OneStepResult ∈ types || TMLEResult ∈ types
 needs_shifted_propensity(types) = TMLEResult ∈ types
 
