@@ -49,9 +49,12 @@ plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 # define basic estimators
 function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
 
-    ψ = mean(Hn .* Y)
+    # use stabilized point estimate
+    ψ = mean((Hn ./ mean(Hn)) .* Y) 
 
-    estimating_function = (Hn .* Y) .- ψ
+    # use non-stabilized variance estimate
+    estimating_function = (Hn .* Y)
+    estimating_function = estimating_function .- mean(estimating_function)
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || size(G, 1) == 0
