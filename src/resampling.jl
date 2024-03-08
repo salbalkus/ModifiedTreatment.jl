@@ -5,7 +5,15 @@ bootstrap_samples(sampler::BootstrapSampler, O::AbstractNode) = node(O -> bootst
 bootstrap_samples(sampler::BootstrapSampler, O::CausalTable) = Iterators.map(i -> bootstrap(sampler, O), 1:sampler.B)
 
 mutable struct BasicSampler <: BootstrapSampler end
-bootstrap(::BasicSampler, O::CausalTable) = Tables.subset(O, rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
+
+function bootstrap(::BasicSampler, O::CausalTable)
+
+    # Sample randomly with replacement
+    tbl = Tables.subset(gettable(O), rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
+
+    # Return the resampled table
+    return CausalTables.replacetable(O, tbl)
+end
 
 ######
 
@@ -18,9 +26,12 @@ end
 
 # Function to update the graph in the ClusterSampler to fit a new sample size
 function update!(cs::ClusterSampler, O)
-    cs.n_clusters = DataAPI.nrow(O) ÷ cs.K
-    # Since we're indexing connected observations adjacently,
-    # we know that the adjacency matrix will be block diagonal
+
+    # Calculate the number of clusters based on the cluster size and sample size
+    cs.n_clusters = DataAPI.nrow(O) ÷ cs.K 
+
+    # Since ClusterSampler indexes connected observations adjacently, we know that the adjacency matrix will be block diagonal.
+    # Therefore, we can construct a "clustered" graph by as a block-diagonal matrix of K x K blocks.
     block = ones(cs.K, cs.K)
     block[diagind(block)] .= 0
     block = sparse(block)

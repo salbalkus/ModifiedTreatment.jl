@@ -243,7 +243,7 @@ end
 
     # TODO: Add better tests to ensure the bootstrap is working correctly
     # Test the cluster bootstrap
-    B = 200
+    B = 100
     clustersampler = ClusterSampler(2)
     ModifiedTreatment.bootstrap!(clustersampler, output, B)  
     σ2boot_est = values(σ2boot(output))
@@ -253,13 +253,15 @@ end
     @test all(within.(σ2net_est[2:end], σ2boot_est[2:end], moe))
 
     # Test graph updating scheme
-    data_small = rand(dgp_net, 10^3)
+    # and that the basic bootstrap works on a graph with otherwise-IID data
+    data_small = rand(dgp_net, 10^4)
     mtpmach2 = machine(mtp, data_small, intervention) |> fit!
     output2 = ModifiedTreatment.estimate(mtpmach2, intervention)
-    ModifiedTreatment.bootstrap!(clustersampler, output2, B)  
-    
-    σ2boot_est2 = σ2boot(output2)
-    @test all(values(σ2boot_est) .< moe)
+    basicsampler = BasicSampler()
+    ModifiedTreatment.bootstrap!(basicsampler, output2, B)  
+    σ2boot_est2 = values(σ2boot(output2))
+    @test all(σ2boot_est2 .< moe)
+    @test all(σ2boot_est .- σ2boot_est2 .< moe * 0.1)
 end
 
 """

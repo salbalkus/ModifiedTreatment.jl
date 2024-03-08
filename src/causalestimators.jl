@@ -65,9 +65,8 @@ end
 
 function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
     weight_mean = mean(Hn)
-    estimating_function_uncentered = (Hn .* Y) ./ weight_mean
-    ψ = mean(estimating_function_uncentered)
-    estimating_function = estimating_function_uncentered .- ψ
+    ψ = mean((Hn .* Y) ./ weight_mean)
+    estimating_function = Hn .* (Y .- ψ) ./ weight_mean
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || size(G, 1) == 0
