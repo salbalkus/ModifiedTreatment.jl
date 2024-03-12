@@ -71,7 +71,7 @@ function MMI.predict(::DecomposedPropensityRatio, fitresult, Xy_nu, Xy_de)
     return output
 end
 
-mutable struct SuperLearner <: MMI.Model 
+mutable struct SuperLearner <: MMI.Supervised 
     models
     resampling
     SuperLearner(models, resampling = CV()) = new(models, resampling)
