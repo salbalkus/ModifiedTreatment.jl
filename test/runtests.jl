@@ -2,15 +2,15 @@ using Test
 using ModifiedTreatment
 using CausalTables
 using Distributions
-using MLJBase
-using MLJLinearModels
-using MLJModels
 using Graphs
 using Condensity
-
 using Tables
 using TableOperations
 using DataAPI
+using MLJ
+
+LinearRegressor = @load LinearRegressor pkg=MLJLinearModels
+DecisionTreeRegressor = @load DecisionTreeRegressor pkg=DecisionTree
 
 using Random
 #using Logging
@@ -113,26 +113,40 @@ end
     mach_ratio = machine(ratio_model, L, A) |> fit!
     LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), L1_s = Tables.getcolumn(L, :L1_s), A = Tables.getcolumn(A, :A), A_s = Tables.getcolumn(A, :A_s)))
     
-    @test all(MLJBase.predict(mach_ratio, LA, LAδ) .== 1.0)
+    @test all(MLJ.predict(mach_ratio, LA, LAδ) .== 1.0)
     
     LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), L1_s = Tables.getcolumn(L, :L1_s), A = Tables.getcolumn(A, :A) .+ 0.1, A_s = Tables.getcolumn(A, :A_s) .+ (adjacency_matrix(getgraph(data_net)) * (ones(nv(data_net.graph)) .* 0.1))))
     
     g0shift = pdf.(condensity(dgp_net, LAδ, :A), Tables.getcolumn(LAδ, :A)) .* pdf.(condensity(dgp_net, LAδ, :A_s), Tables.getcolumn(LAδ, :A_s))
     g0 = pdf.(condensity(dgp_net, LA, :A), Tables.getcolumn(LA, :A)) .* pdf.(condensity(dgp_net, LA, :A_s), Tables.getcolumn(LA, :A_s))
     
-    foo = MLJBase.predict(mach_ratio, LA, LAδ)
+    foo = MLJ.predict(mach_ratio, LA, LAδ)
     true_ratio = g0 ./ g0shift
     @test foo ≈ true_ratio
+end
+
+@testset begin
+    X = TableOperations.select(data_iid, :L1) |> Tables.rowtable
+    y = gettreatment(data_iid)
+    model_list = (lr = LinearRegressor(), dt = DecisionTreeRegressor())
+
+    sl = SuperLearner(model_list, CV(nfolds = 5))
+    resampling = CV(nfolds = 5)
+
+    mach = machine(sl, X, y) |> fit!
+    yhat = predict(mach, X)
+
+    @test length(unique(yhat)) == 5
 end
 
 @testset "CrossFitModel" begin   
     # Test a regression model
     LA = replacetable(data_net, TableOperations.select(data_net, :L1, :A) |> Tables.columntable)    
     Y = Tables.getcolumn(LA, :A) .+ 0.5 .* Tables.getcolumn(LA, :L1) .+ 10
-    mean_estimator = MLJLinearModels.LinearRegressor()
+    mean_estimator = LinearRegressor()
     mean_crossfit = CrossFitModel(mean_estimator, CV())
     mach_mean = machine(mean_crossfit, LA, Y) |> fit!
-    pred_mean = MLJBase.predict(mach_mean, LA)
+    pred_mean = MLJ.predict(mach_mean, LA)
     @test cor(Y, pred_mean) ≈ 1.0
 
     # TODO: Test this for network data. Note that currently CrossFitModel requires IID data because
@@ -144,13 +158,13 @@ end
     mach_ratio = machine(ratio_crossfit, L, A) |> fit!
     LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), A = Tables.getcolumn(A, :A)))
 
-    @test all(MLJBase.predict(mach_ratio, LA, LAδ) .== 1.0)
+    @test all(MLJ.predict(mach_ratio, LA, LAδ) .== 1.0)
 
     LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), A = Tables.getcolumn(A, :A) .+ 0.1))
     g0shift = pdf.(condensity(dgp_iid, LAδ, :A), Tables.getcolumn(LAδ, :A))
     g0 = pdf.(condensity(dgp_iid, LA, :A), Tables.getcolumn(LA, :A))
     
-    foo = MLJBase.predict(mach_ratio, LA, LAδ)
+    foo = MLJ.predict(mach_ratio, LA, LAδ)
     true_ratio = g0 ./ g0shift
 
     @test foo ≈ true_ratio

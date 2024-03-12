@@ -3,6 +3,7 @@ module ModifiedTreatment
     using MLJModelInterface
     using MLJTuning
     using MLJBase
+    using StatisticalMeasures
     using GLM
     using StatsBase
     using Graphs
@@ -39,7 +40,7 @@ module ModifiedTreatment
     export InterventionModel
 
     include("crossfitting.jl")
-    export CrossFitModel, DecomposedPropensityRatio
+    export CrossFitModel, DecomposedPropensityRatio, SuperLearner
 
     include("resampling.jl")
     export ResampledModel, BootstrapSampler, BasicSampler, ClusterSampler, VertexMooNSampler, VertexSampler

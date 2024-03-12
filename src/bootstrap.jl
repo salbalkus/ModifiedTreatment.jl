@@ -64,7 +64,7 @@ end
 # Helper function to compute bootstrapped estimates
 function bootstrap_sample(mtpresult::MTPResult, sampler::BootstrapSampler, mach_Qn, mach_Hn, O::CausalTable, types::Vector{DataType})
     
-    # Extract the varianbles needed to bootstrap
+    # Extract the variables needed to bootstrap
     O_sample = bootstrap(sampler, O)
     Y = getresponse(O_sample)
     G = get_dependency_neighborhood(getgraph(O_sample))

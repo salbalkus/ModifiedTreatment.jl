@@ -1,5 +1,5 @@
 # Define a struct to hold the vector of Machine objects
-struct CrossFitModel <: MMI.Model
+mutable struct CrossFitModel <: MMI.Model
     model::MMI.Model
     resampling::MT.ResamplingStrategy
 end
@@ -70,3 +70,28 @@ function MMI.predict(::DecomposedPropensityRatio, fitresult, Xy_nu, Xy_de)
     end
     return output
 end
+
+mutable struct SuperLearner <: MMI.Model 
+    models
+    resampling
+    SuperLearner(models, resampling = CV()) = new(models, resampling)
+end
+
+
+function MMI.fit(sl::SuperLearner, verbosity, X, y)
+
+    measurements = map(m -> evaluate(m, X, y, sl.resampling, measure=rmse).measure, sl.models)
+    best_model = sl.models[argmin(measurements)]
+    
+    best_mach = machine(best_model, X, y) |> fit!
+    
+    fitresult = (; best_mach = best_mach,)
+    cache = nothing
+    report = (; measurements = measurements, best_model = best_model)
+    return fitresult, cache, report
+end
+
+function MMI.predict(sl::SuperLearner, fitresult, X)
+    MMI.predict(fitresult.best_mach, X)
+end
+
