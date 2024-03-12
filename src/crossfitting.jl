@@ -80,7 +80,7 @@ end
 
 function MMI.fit(sl::SuperLearner, verbosity, X, y)
 
-    measurements = map(m -> evaluate(m, X, y, sl.resampling, measure=rmse).measure, sl.models)
+    measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = rmse).measure, sl.models)
     best_model = sl.models[argmin(measurements)]
     
     best_mach = machine(best_model, X, y) |> fit!

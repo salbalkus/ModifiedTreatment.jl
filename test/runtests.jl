@@ -11,6 +11,8 @@ using MLJ
 
 LinearRegressor = @load LinearRegressor pkg=MLJLinearModels
 DecisionTreeRegressor = @load DecisionTreeRegressor pkg=DecisionTree
+KNNRegressor = @load KNNRegressor pkg=NearestNeighborModels
+
 
 using Random
 #using Logging
@@ -125,18 +127,18 @@ end
     @test foo ≈ true_ratio
 end
 
-@testset begin
-    X = TableOperations.select(data_iid, :L1) |> Tables.rowtable
-    y = gettreatment(data_iid)
-    model_list = (lr = LinearRegressor(), dt = DecisionTreeRegressor())
+@testset "SuperLearner" begin
 
-    sl = SuperLearner(model_list, CV(nfolds = 5))
-    resampling = CV(nfolds = 5)
+    X = TableOperations.select(data_iid, :L1, :A) |> Tables.columntable
+    y = getresponse(data_iid)
 
     mach = machine(sl, X, y) |> fit!
     yhat = predict(mach, X)
 
-    @test length(unique(yhat)) == 5
+    @test length(yhat) == length(y)
+
+    # should select the linear model as the best
+    @test typeof(report(mach).best_model) <: LinearRegressor
 end
 
 @testset "CrossFitModel" begin   
