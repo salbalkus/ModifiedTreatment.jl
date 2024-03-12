@@ -13,7 +13,6 @@ LinearRegressor = @load LinearRegressor pkg=MLJLinearModels
 DecisionTreeRegressor = @load DecisionTreeRegressor pkg=DecisionTree
 KNNRegressor = @load KNNRegressor pkg=NearestNeighborModels
 
-
 using Random
 #using Logging
 
@@ -84,8 +83,6 @@ data_net = rand(dgp_net, 100)
     @test all(differentiate_intervention(inv_inducedint, A, L) .≈ 1/1.5)
 end
 
-
-
 @testset "InterventionModel" begin
     intervention = LinearShift(1.5, 0.5)
     intmach = machine(InterventionModel(), data_net) |> fit!
@@ -132,6 +129,7 @@ end
     X = TableOperations.select(data_iid, :L1, :A) |> Tables.columntable
     y = getresponse(data_iid)
 
+    sl = SuperLearner([LinearRegressor(), DecisionTreeRegressor(), KNNRegressor()], CV())
     mach = machine(sl, X, y) |> fit!
     yhat = predict(mach, X)
 
