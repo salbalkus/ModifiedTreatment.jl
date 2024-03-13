@@ -9,9 +9,15 @@ using TableOperations
 using DataAPI
 using MLJ
 
+# Regressors
 LinearRegressor = @load LinearRegressor pkg=MLJLinearModels
 DecisionTreeRegressor = @load DecisionTreeRegressor pkg=DecisionTree
 KNNRegressor = @load KNNRegressor pkg=NearestNeighborModels
+
+# Classifiers
+LogisticClassifier = @load LogisticClassifier pkg=MLJLinearModels
+DecisionTreeClassifier = @load DecisionTreeClassifier pkg=DecisionTree
+KNNClassifier = @load KNNClassifier pkg=NearestNeighborModels
 
 using Random
 #using Logging
@@ -134,7 +140,6 @@ end
     yhat = predict(mach, X)
 
     @test length(yhat) == length(y)
-
     # should select the linear model as the best
     @test typeof(report(mach).best_model) <: LinearRegressor
 end

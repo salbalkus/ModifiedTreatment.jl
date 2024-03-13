@@ -71,14 +71,23 @@ function MMI.predict(::DecomposedPropensityRatio, fitresult, Xy_nu, Xy_de)
     return output
 end
 
-mutable struct SuperLearner <: MMI.Supervised 
-    models
-    resampling
-    SuperLearner(models, resampling = CV()) = new(models, resampling)
+mutable struct SuperLearnerDeterministic <: MMI.Deterministic 
+    models::Array{MMI.Deterministic, 1}
+    resampling::MT.ResamplingStrategy
+    SuperLearnerDeterministic(models::Array{MMI.Deterministic, 1}, resampling = CV()) = new(models, resampling)
 end
+SuperLearner(models::Array{MMI.Deterministic, 1}, resampling) = SuperLearnerDeterministic(models, resampling)
 
+# TODO: Need a measure to get SuperLearnerProbabilistic to choose the best model; doesn't work with RMSE
+#mutable struct SuperLearnerProbabilistic <: MMI.Probabilistic 
+#    models::Array{MMI.Probabilistic , 1}
+#    resampling::MT.ResamplingStrategy
+#    SuperLearnerProbabilistic(models::Array{MMI.Probabilistic , 1}, resampling = CV()) = new(models, resampling)
+#end
+#SuperLearnerSupervised = Union{SuperLearnerDeterministic, SuperLearnerProbabilistic}
+#SuperLearner(models::Array{MMI.Probabilistic, 1}, resampling) = SuperLearnerProbabilistic(models, resampling)
 
-function MMI.fit(sl::SuperLearner, verbosity, X, y)
+function MMI.fit(sl::SuperLearnerDeterministic, verbosity, X, y)
 
     measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = rmse, verbosity = -1).measure, sl.models)
     best_model = sl.models[argmin(measurements)]
@@ -91,7 +100,7 @@ function MMI.fit(sl::SuperLearner, verbosity, X, y)
     return fitresult, cache, report
 end
 
-function MMI.predict(sl::SuperLearner, fitresult, X)
+function MMI.predict(sl::SuperLearnerDeterministic, fitresult, X)
     MMI.predict(fitresult.best_mach, X)
 end
 
