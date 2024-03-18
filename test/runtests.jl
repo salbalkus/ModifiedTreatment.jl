@@ -10,6 +10,7 @@ using DataAPI
 using MLJ
 
 # Regressors
+DeterministicConstantRegressor = @load DeterministicConstantRegressor pkg=MLJModels
 LinearRegressor = @load LinearRegressor pkg=MLJLinearModels
 DecisionTreeRegressor = @load DecisionTreeRegressor pkg=DecisionTree
 KNNRegressor = @load KNNRegressor pkg=NearestNeighborModels
@@ -131,17 +132,28 @@ end
 end
 
 @testset "SuperLearner" begin
-
+    Random.seed!(1)
+    # Start by testing the deterministic version
     X = TableOperations.select(data_iid, :L1, :A) |> Tables.columntable
     y = getresponse(data_iid)
-
-    sl = SuperLearner([LinearRegressor(), DecisionTreeRegressor(), KNNRegressor()], CV())
+    sl = SuperLearner([DeterministicConstantRegressor(), LinearRegressor(), DecisionTreeRegressor(), KNNRegressor()], CV())
     mach = machine(sl, X, y) |> fit!
     yhat = predict(mach, X)
 
     @test length(yhat) == length(y)
-    # should select the linear model as the best
-    @test typeof(report(mach).best_model) <: LinearRegressor
+    @test typeof(report(mach).best_model) <: LinearRegressor  # should select the linear model as the best
+
+
+    # Now test the probabilistic version
+    y = coerce(getresponse(data_iid) .> 15, OrderedFactor)
+    
+    sl = SuperLearner([ConstantClassifier(), LogisticClassifier(), DecisionTreeClassifier(), KNNClassifier()], CV())
+    mach = machine(sl, X, y) |> fit!
+    yhat = pdf.(predict(mach, X), true)
+
+    @test length(yhat) == length(y)
+    @test typeof(report(mach).best_model) <: KNNClassifier  # should select the linear model as the best
+    @test mean((yhat .> 0.5) .== y) > 0.9 # should get at least 90% accuracy
 end
 
 @testset "CrossFitModel" begin   
@@ -283,18 +295,4 @@ end
     @test all(σ2boot_est .- σ2boot_est2 .< moe * 0.1)
 end
 
-"""
-@testset "Super Learning" begin
-
-    dgp = DataGeneratingProcess(
-        @dgp(
-            L1 ~ DiscreteUniform(1, 4),
-            L2 ~ Poisson(10),
-            L3 ~ Exp(1)
-            A ~ @. Normal(log(:L2) + :L3^2, 0.5),
-            Y ~ @. Normal(:A + :L1 * (0.5 * sin(:L2) + 0.1 * :L3)  + 10, 1)
-        );
-    )
-end
-"""
 

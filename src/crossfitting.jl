@@ -76,20 +76,10 @@ mutable struct SuperLearnerDeterministic <: MMI.Deterministic
     resampling::MT.ResamplingStrategy
     SuperLearnerDeterministic(models::Array{MMI.Deterministic, 1}, resampling = CV()) = new(models, resampling)
 end
-SuperLearner(models::Array{MMI.Deterministic, 1}, resampling) = SuperLearnerDeterministic(models, resampling)
-
-# TODO: Need a measure to get SuperLearnerProbabilistic to choose the best model; doesn't work with RMSE
-#mutable struct SuperLearnerProbabilistic <: MMI.Probabilistic 
-#    models::Array{MMI.Probabilistic , 1}
-#    resampling::MT.ResamplingStrategy
-#    SuperLearnerProbabilistic(models::Array{MMI.Probabilistic , 1}, resampling = CV()) = new(models, resampling)
-#end
-#SuperLearnerSupervised = Union{SuperLearnerDeterministic, SuperLearnerProbabilistic}
-#SuperLearner(models::Array{MMI.Probabilistic, 1}, resampling) = SuperLearnerProbabilistic(models, resampling)
 
 function MMI.fit(sl::SuperLearnerDeterministic, verbosity, X, y)
 
-    measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = rmse, verbosity = -1).measure, sl.models)
+    measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = rmse, verbosity = -1).measurement, sl.models)
     best_model = sl.models[argmin(measurements)]
     
     best_mach = machine(best_model, X, y) |> fit!
@@ -100,7 +90,35 @@ function MMI.fit(sl::SuperLearnerDeterministic, verbosity, X, y)
     return fitresult, cache, report
 end
 
-function MMI.predict(sl::SuperLearnerDeterministic, fitresult, X)
-    MMI.predict(fitresult.best_mach, X)
+MMI.predict(sl::SuperLearnerDeterministic, fitresult, X) = MMI.predict(fitresult.best_mach, X)
+
+mutable struct SuperLearnerProbabilistic <: MMI.Probabilistic 
+    models::Array{MMI.Probabilistic , 1}
+    resampling::MT.ResamplingStrategy
+    SuperLearnerProbabilistic(models::Array{MMI.Probabilistic , 1}, resampling = CV()) = new(models, resampling)
 end
+
+function MMI.fit(sl::SuperLearnerProbabilistic, verbosity, X, y)
+
+    measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = log_loss, verbosity = -1).measurement, sl.models)
+    best_model = sl.models[argmin(measurements)]
+    
+    best_mach = machine(best_model, X, y) |> fit!
+    
+    fitresult = (; best_mach = best_mach,)
+    cache = nothing
+    report = (; measurements = measurements, best_model = best_model)
+    return fitresult, cache, report
+end
+
+MMI.predict(sl::SuperLearnerProbabilistic, fitresult, X) = MMI.predict(fitresult.best_mach, X)
+
+
+
+
+
+SuperLearner(models::Array{MMI.Deterministic, 1}, resampling) = SuperLearnerDeterministic(models, resampling)
+SuperLearner(models::Array{MMI.Probabilistic, 1}, resampling) = SuperLearnerProbabilistic(models, resampling)
+
+
 
