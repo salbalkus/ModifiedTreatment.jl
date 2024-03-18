@@ -273,7 +273,7 @@ version = "2.3.1"
 
 [[deps.Condensity]]
 deps = ["CausalTables", "DataAPI", "Distributions", "Documenter", "GaussianProcesses", "InvertedIndices", "KernelDensity", "MLJBase", "MLJModelInterface", "MLJTuning", "QuadGK", "StatsBase", "TableOperations", "TableTransforms", "Tables"]
-git-tree-sha1 = "353f0bd532a8883f612f7f436e939268df07605e"
+git-tree-sha1 = "2403f472bbefcef4879fe0f288c90c884116427d"
 repo-rev = "main"
 repo-url = "https://github.com/salbalkus/Condensity.jl"
 uuid = "4a3ed1f2-33f5-4d2a-92e9-d08cf3575152"
@@ -986,7 +986,7 @@ version = "1.1.0"
 uuid = "a63ad114-7e13-5084-954f-fe012c677804"
 
 [[deps.ModifiedTreatment]]
-deps = ["CausalTables", "Combinatorics", "DataAPI", "DiffResults", "ForwardDiff", "GLM", "Graphs", "LinearAlgebra", "MLJBase", "MLJModelInterface", "MLJTuning", "SparseArrays", "StatisticalMeasures", "StatsBase", "TableOperations", "Tables"]
+deps = ["CausalTables", "Combinatorics", "Condensity", "DataAPI", "DiffResults", "ForwardDiff", "GLM", "Graphs", "LinearAlgebra", "MLJBase", "MLJModelInterface", "MLJTuning", "SparseArrays", "StatisticalMeasures", "StatsBase", "TableOperations", "Tables"]
 path = "C:\\Users\\salba\\.julia\\dev\\ModifiedTreatment"
 uuid = "850ff2fb-1851-4098-84a9-06d36a9b9803"
 version = "1.0.0-DEV"

@@ -1,6 +1,6 @@
 mutable struct MTP <: UnsupervisedNetworkComposite
-    mean_estimator
-    density_ratio_estimator
+    mean_estimator::MMI.Supervised
+    density_ratio_estimator::Condensity.ConDensityRatioEstimator
     cv_splitter
     confidence::Float64
 end
@@ -21,7 +21,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
     
     # Fit and estimate nuisance parameters
-    mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
+    mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, LAδs, Ls, As)
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
 
     # Get causal estimates
@@ -115,15 +115,34 @@ function intervene_on_data(model_intervention, Os, δ)
     return LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv
 end
 
-function crossfit_nuisance_estimators(mtp, Y, LAs, Ls, As)
-    dprmodel = DecomposedPropensityRatio(mtp.density_ratio_estimator)
+function crossfit_nuisance_estimators(mtp, Y, LAs, LAδs, Ls, As)
 
-    if isnothing(mtp.cv_splitter)
-        mach_mean = machine(mtp.mean_estimator, LAs, Y)
-        mach_density = machine(dprmodel, Ls, As)
+    # If the density ratio estimator is adaptive, we need to ensure multiple estimators are fit for each factorized component
+    # (Otherwise, this is handled automatically by fixed density ratio estimators)
+    ratio_model_type = typeof(mtp.density_ratio_estimator)
+    if ratio_model_type <: Condensity.ConDensityRatioEstimatorAdaptive
+        dprmodel = DecomposedPropensityRatio(mtp.density_ratio_estimator)
+    elseif ratio_model_type <: Condensity.ConDensityRatioEstimatorFixed
+        dprmodel = mtp.density_ratio_estimator
     else
-        mach_mean = machine(CrossFitModel(mtp.mean_estimator, mtp.cv_splitter), LAs, Y)
-        mach_density = machine(CrossFitModel(dprmodel, mtp.cv_splitter), Ls, As)
+        throw(ArgumentError("Unrecognized density ratio estimator type. Density ratio estimator must be of type CondensityRatioEstimatorAdaptive or CondensityRatioEstimatorFixed."))
+    end
+
+    # Decide whether to cross-fit the models
+    if isnothing(mtp.cv_splitter)
+        mean_model = mtp.mean_estimator
+        dr_model = dprmodel
+    else
+        mean_model = CrossFitModel(mtp.mean_estimator, mtp.cv_splitter)
+        dr_model = CrossFitModel(dprmodel, mtp.cv_splitter)
+    end
+
+    # Construct machines bound to appropriate data
+    mach_mean = machine(mtp.mean_estimator, LAs, Y)
+    if ratio_model_type <: Condensity.ConDensityRatioEstimatorAdaptive
+        mach_density = machine(dr_model, Ls, As)
+    else # if ratio_model_type <: Condensity.ConDensityRatioEstimatorFixed
+        mach_density = machine(dr_model, LAδs, LAs)
     end
 
     return mach_mean, mach_density

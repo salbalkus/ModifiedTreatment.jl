@@ -11,6 +11,7 @@ module ModifiedTreatment
     using TableOperations
     using DataAPI
     using CausalTables
+    using Condensity
 
     using LinearAlgebra
     import Combinatorics: combinations

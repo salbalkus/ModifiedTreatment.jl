@@ -180,20 +180,21 @@ end
     Random.seed!(1)
     
     data_large = rand(dgp_iid, 10^4)
-    intervention = LinearShift(1.1, 0.5)
+    intervention = LinearShift(1.001, 0.1)
     truth = compute_true_MTP(dgp_iid, data_large, intervention)
 
     moe = 0.2
 
     mean_estimator = LinearRegressor()
-    density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(dgp_iid))
+    #density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(dgp_iid))
+    density_ratio_estimator = DensityRatioClassifier(LogisticClassifier())
     boot_sampler = BasicSampler()
-    cv_splitter = nothing#CV(nfolds = 5)
+    cv_splitter = CV(nfolds = 10)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
     output = ModifiedTreatment.estimate(mtpmach, intervention)
-    
+
     ψ_est = ψ(output)
 
     @test within(ψ_est.plugin, truth.ψ, moe)
@@ -211,7 +212,6 @@ end
     # TODO: Add better tests to ensure the bootstrap is working correctly
     B = 10
     ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
-    output
     @test all(values(σ2boot(output)) .< moe)
 end 
 
