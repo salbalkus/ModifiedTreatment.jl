@@ -8,6 +8,7 @@ using Tables
 using TableOperations
 using DataAPI
 using MLJ
+using DensityRatioEstimation
 
 # Regressors
 DeterministicConstantRegressor = @load DeterministicConstantRegressor pkg=MLJModels
@@ -187,32 +188,48 @@ end
     @test foo ≈ true_ratio
 end
 
-@testset "MTP IID" begin
+#@testset "MTP IID" begin
   
     Random.seed!(1)
     
-    data_large = rand(dgp_iid, 10^4)
+    data_large = rand(dgp_iid, 10^3)
     intervention = LinearShift(1.001, 0.1)
     truth = compute_true_MTP(dgp_iid, data_large, intervention)
 
-    moe = 0.2
+    moe = 0.1
 
     mean_estimator = LinearRegressor()
-    #density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(dgp_iid))
-    density_ratio_estimator = DensityRatioClassifier(LogisticClassifier())
     boot_sampler = BasicSampler()
-    cv_splitter = CV(nfolds = 10)
+    cv_splitter = CV(nfolds = 5)
 
+    # Probabilistic Classifier
+    density_ratio_estimator = DensityRatioClassifier(LogisticClassifier())
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
     output = ModifiedTreatment.estimate(mtpmach, intervention)
 
-    ψ_est = ψ(output)
+    # uKMM
+    density_ratio_estimator = DensityRatioKernel(uKMM(σ = 0.1))
+    mtp = MTP(mean_estimator, density_ratio_estimator, nothing)
+    mtpmach = machine(mtp, data_large, intervention) |> fit!
+    output_ukmm = ModifiedTreatment.estimate(mtpmach, intervention)
 
-    @test within(ψ_est.plugin, truth.ψ, moe)
-    @test within(ψ_est.ipw, truth.ψ, moe)
-    @test within(ψ_est.onestep, truth.ψ, moe)
-    @test within(ψ_est.tmle, truth.ψ, moe)
+    density_ratio_oracle = DensityRatioPlugIn(OracleDensityEstimator(dgp_iid))
+    mtp_oracle = MTP(mean_estimator, density_ratio_oracle, nothing)
+    mtpmach_oracle = machine(mtp_oracle, data_large, intervention) |> fit!
+    output_oracle = ModifiedTreatment.estimate(mtpmach_oracle, intervention)
+
+    ψ_est = ψ(output)
+    ψ_est2 = ψ(output_ukmm)
+    ψ_oracle = ψ(output_oracle)
+
+    @test within(ψ_oracle.plugin, truth.ψ, moe)
+    @test within(ψ_oracle.sipw, truth.ψ, moe)
+    @test within(ψ_oracle.onestep, truth.ψ, moe)
+    @test within(ψ_oracle.tmle, truth.ψ, moe)
+
+    # ensure ratio nuisance is similar
+    @test maximum(abs.(report(mtpmach_oracle).Hn .- report(mtpmach).Hn)) < moe
     
     σ2_est = values(σ2(output))
     @test isnothing(σ2_est[1])

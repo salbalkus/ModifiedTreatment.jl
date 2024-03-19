@@ -21,7 +21,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
     
     # Fit and estimate nuisance parameters
-    mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, LAδs, Ls, As)
+    mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
 
     # Get causal estimates
@@ -115,7 +115,7 @@ function intervene_on_data(model_intervention, Os, δ)
     return LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv
 end
 
-function crossfit_nuisance_estimators(mtp, Y, LAs, LAδs, Ls, As)
+function crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)
 
     # If the density ratio estimator is adaptive, we need to ensure multiple estimators are fit for each factorized component
     # (Otherwise, this is handled automatically by fixed density ratio estimators)
@@ -142,7 +142,7 @@ function crossfit_nuisance_estimators(mtp, Y, LAs, LAδs, Ls, As)
     if ratio_model_type <: Condensity.ConDensityRatioEstimatorAdaptive
         mach_density = machine(dr_model, Ls, As)
     else # if ratio_model_type <: Condensity.ConDensityRatioEstimatorFixed
-        mach_density = machine(dr_model, LAδs, LAs)
+        mach_density = machine(dr_model, LAδsinv, LAs)
     end
 
     return mach_mean, mach_density
