@@ -208,11 +208,11 @@ end
     mtpmach = machine(mtp, data_large, intervention) |> fit!
     output = ModifiedTreatment.estimate(mtpmach, intervention)
 
-    # uKMM
-    density_ratio_estimator = DensityRatioKernel(uKMM(σ = 0.1))
+    # KLEIP
+    density_ratio_estimator = DensityRatioKLIEP([0.5, 1.0, 2.0], [100])
     mtp = MTP(mean_estimator, density_ratio_estimator, nothing)
-    mtpmach = machine(mtp, data_large, intervention) |> fit!
-    output_ukmm = ModifiedTreatment.estimate(mtpmach, intervention)
+    mtpmachk = machine(mtp, data_large, intervention) |> fit!
+    output_kliep = ModifiedTreatment.estimate(mtpmachk, intervention)
 
     density_ratio_oracle = DensityRatioPlugIn(OracleDensityEstimator(dgp_iid))
     mtp_oracle = MTP(mean_estimator, density_ratio_oracle, nothing)
@@ -220,13 +220,15 @@ end
     output_oracle = ModifiedTreatment.estimate(mtpmach_oracle, intervention)
 
     ψ_est = ψ(output)
-    ψ_est2 = ψ(output_ukmm)
+    ψ_est2 = ψ(output_kliep)
     ψ_oracle = ψ(output_oracle)
 
-    @test within(ψ_oracle.plugin, truth.ψ, moe)
-    @test within(ψ_oracle.sipw, truth.ψ, moe)
-    @test within(ψ_oracle.onestep, truth.ψ, moe)
-    @test within(ψ_oracle.tmle, truth.ψ, moe)
+    @test within(ψ_est.plugin, truth.ψ, moe)
+    @test within(ψ_est.sipw, truth.ψ, moe)
+    @test within(ψ_est.onestep, truth.ψ, moe)
+    @test within(ψ_est.tmle, truth.ψ, moe)
+
+    maximum(abs.(report(mtpmach_oracle).Hn .- report(mtpmachk).Hn))
 
     # ensure ratio nuisance is similar
     @test maximum(abs.(report(mtpmach_oracle).Hn .- report(mtpmach).Hn)) < moe
