@@ -40,19 +40,16 @@ function get_summarized_data(O)
         error("Treatment variable is a summarized variable. This is not allowed. Instead, specify `treatment` as the variable to which a direct intervention is being applied, and specify the summarized treatment in `summary` only.")
     end
 
-    # Construct new Tables / CausalTables to return
+    # Extract the summarized treatments into A
     if treatmentvar ∈ keys(summarizedvars)
         A = TableOperations.select(LAs, treatmentvar, summarizedvars[treatmentvar]) |> Tables.columntable
     else
         A = TableOperations.select(LAs, treatmentvar) |> Tables.columntable
     end
-    controlssymbols = getcontrolssymbols(LAs)
 
-    if any(controlssymbols .∈ [keys(summarizedvars)])
-        L = replacetable(LAs, TableOperations.select(LAs, controlssymbols..., values(summarizedvars[controlssymbols])...) |> Tables.columntable)
-    else
-        L = replacetable(LAs, TableOperations.select(LAs, controlssymbols...) |> Tables.columntable)
-    end
+    # Extract the summarized controls into L
+    controlssymbols = getcontrolssymbols(LAs)
+    L = replacetable(LAs, TableOperations.select(LAs, vcat(controlssymbols, [k[2] for k in pairs(summarizedvars) if k[1] ∈ controlssymbols])...) |> Tables.columntable)
 
     return LAs, A, L, summaries, treatmentvar, summarizedvars
 end
