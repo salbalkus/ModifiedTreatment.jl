@@ -97,7 +97,7 @@ end
     LAs, Ls, As = predict(intmach, intervention) 
     @test gettable(Ls) == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s)
     @test As == (A = data_net.tbl.A, A_s = data_net.tbl.A_s,)
-    @test LAs.tbl == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, A = data_net.tbl.A, A_s = data_net.tbl.A_s)
+    @test gettable(LAs) == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, A = data_net.tbl.A, A_s = data_net.tbl.A_s)
     
     LAδs, dAδs = transform(intmach, intervention)
     @test LAδs.tbl.A ≈ (data_net.tbl.A .* 1.5) .+ 0.5
@@ -254,31 +254,57 @@ end
         L1 ~ DiscreteUniform(1, 5),
         L2 ~ Binomial(4, 0.5),
         L2s = Sum(:L2, include_self = false),
-        A ~ (@. Normal(:L1 + 0.1 * :L2s, 0.5)),
+        A ~ (@. Normal(:L1 + :L2 + 0.1 * :L2s, 0.5)),
         As = Sum(:A, include_self = false),
-        Y ~ (@. Normal(:A + :As + 0.1 * :L1 + 0.1 * :L2 + 0.05 * :L2s + 10, 1))
+        Y ~ (@. Normal(:A + 0.5 * :As + 0.1 * :L1 + 0.1 * :L2 + 0.05 * :L2s + 10, 1))
     );
 
     # Note this only yields clusters for K = 1, not any other K
     dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, 1), distseqnet; 
                             treatment = :A, response = :Y, controls = [:L1, :L2]);
 
-    
+    dgp_net = DataGeneratingProcess(
+        n -> Graphs.grid([Int64(sqrt(n)), Int64(sqrt(n))]; periodic=false),
+        @dgp(
+            L ~ DiscreteUniform(1, 4),
+            L2 ~ Binomial(5, 0.4),
+            L2s = Sum(:L2, include_self = false),
+            L3 ~ Beta(3, 2),
+            L4 ~ Poisson(5),
+            L4s = Sum(:L4, include_self = false),
+            A ~ (@. Normal(:L + 0.5 * :L3 + 0.05 * :L2s + 0.05 * :L4s + 1, 0.5)),
+            As = Sum(:A, include_self = false),
+            Y ~ (@. Normal(:A + 0.5 * :As + :L + 0.1 * (:L2 + :L3 + :L4) + 0.05 * (:L2s + :L4s) + 40, 0.5))
+        );
+        treatment = :A,
+        response = :Y,
+        controls = [:L, :L2, :L3, :L4]
+        )
+
     data_vlarge = rand(dgp_net, 10^6)
-    data_large = rand(dgp_net, 10^4)
+    data_large = rand(dgp_net, 2500)
     intervention = AdditiveShift(0.1)
 
+    
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
-    density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(dgp_net))
+    density_ratio_estimator = DensityRatioKLIEP([0.01, 0.1, 1.0, 10.0], [50])
+    #density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(dgp_net))
     cv_splitter = nothing#CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
+    
+    fieldnames(typeof(output.mtp))
+    fieldnames(typeof(output.mtp.fitresult.interface.nuisance_machines))
+
+    output.mtp.fitresult.interface.nuisance_machines.machine_density.fitresult.dre
 
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
+    truth.ψ
 
+    histogram(report(mtpmach).Hn)
     @test within(ψ_est.plugin, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.sipw, truth.ψ, moe)

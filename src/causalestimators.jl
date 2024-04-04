@@ -37,6 +37,7 @@ mutable struct TMLEResult <: CausalEstimatorResult
     σ2net::Estimate
     σ2boot::Estimate
 end
+
 TMLEResult(ψ, σ2) = TMLEResult(ψ, σ2, nothing, nothing)
 TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 

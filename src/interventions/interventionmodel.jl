@@ -25,14 +25,15 @@ MMI.inverse_transform(m::InterventionModel, fitresult, intervention::Interventio
 function get_summarized_data(O)
     # Apply summary function to the data and select only the variables that are not the response
     Os = CausalTables.summarize(O)
-    LAs = CausalTables.replacetable(Os, TableOperations.select(Os, setdiff(Tables.columnnames(Os), (getresponsesymbol(Os),))...) |> Tables.columntable)
+    #LAs = CausalTables.replacetable(Os, TableOperations.select(Os, setdiff(Tables.columnnames(Os), (getresponsesymbol(Os),))...) |> Tables.columntable)
 
-    # Collect names of the variables being summarized
-    summaries = getsummaries(LAs)
+    # Collect names of the variables being summarized and the treatment
+    summaries = getsummaries(Os)
     summarizedvars = NamedTuple([CausalTables.get_var_to_summarize(val) => key for (key, val) in pairs(summaries)])
+    treatmentvar = gettreatmentsymbol(Os)
+    controlssymbols = getcontrolssymbols(Os)
 
     # Check to make sure treatment is not being summarized multiple times
-    treatmentvar = gettreatmentsymbol(LAs)
     if count(==(treatmentvar), summarizedvars) > 1
         error("Treatment variable is being summarized multiple times. This is not allowed.")
     end
@@ -42,16 +43,16 @@ function get_summarized_data(O)
 
     # Extract the summarized treatments into A
     if treatmentvar ∈ keys(summarizedvars)
-        A = TableOperations.select(LAs, treatmentvar, summarizedvars[treatmentvar]) |> Tables.columntable
+        A = TableOperations.select(Os, treatmentvar, summarizedvars[treatmentvar]) |> Tables.columntable
     else
-        A = TableOperations.select(LAs, treatmentvar) |> Tables.columntable
+        A = TableOperations.select(Os, treatmentvar) |> Tables.columntable
     end
 
     # Extract the summarized controls into L
-    controlssymbols = getcontrolssymbols(LAs)
-    L = replacetable(LAs, TableOperations.select(LAs, vcat(controlssymbols, [k[2] for k in pairs(summarizedvars) if k[1] ∈ controlssymbols])...) |> Tables.columntable)
-
-    return LAs, A, L, summaries, treatmentvar, summarizedvars
+    L = TableOperations.select(Os, vcat(controlssymbols, [k[2] for k in pairs(summarizedvars) if k[1] ∈ controlssymbols])...) |> Tables.columntable
+    LAs = merge(L, A)
+    
+    return replacetable(Os, LAs), A, replacetable(Os, L), summaries, treatmentvar, summarizedvars
 end
 
 
