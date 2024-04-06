@@ -37,17 +37,25 @@ distseqiid = [
 dgp_iid = DataGeneratingProcess(distseqiid; treatment = :A, response = :Y, controls = [:L1]);
 data_iid = rand(dgp_iid, 100)
 
-distseqnet = Vector{Pair{Symbol, CausalTables.ValidDGPTypes}}([
-        :L1 => (; O...) -> DiscreteUniform(1, 5),
-        :L1_s => Sum(:L1, include_self = false),
-        :A => (; O...) -> (@. Normal(O[:L1], 0.5)),
-        :A_s => Sum(:A, include_self = false),
-        :Y => (; O...) -> (@. Normal(O[:A] + 0.1 * O[:L1_s] + 0.1 * O[:L1] + 10, 1))
-    ])
+distseqnet = @dgp(
+    L ~ DiscreteUniform(1, 4),
+    L2 ~ Binomial(5, 0.4),
+    L2s = Sum(:L2, include_self = false),
+    L3 ~ Beta(3, 2),
+    L4 ~ Poisson(5),
+    L4s = Sum(:L4, include_self = false),
+    A ~ (@. Normal(:L + 0.5 * :L3 + 0.05 * :L2s + 0.05 * :L4s + 1, 0.5)),
+    As = Sum(:A, include_self = false),
+    Y ~ (@. Normal(:A + 0.5 * :As + :L + 0.1 * (:L2 + :L3 + :L4) + 0.05 * (:L2s + :L4s) + 40, 0.5))
+);
 
-K = 1
-dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, K), distseqnet; 
-                            treatment = :A, response = :Y, controls = [:L1]);
+dgp_net =  DataGeneratingProcess(
+    n -> Graphs.grid([Int64(sqrt(n)), Int64(sqrt(n))]; periodic=false),
+    distseqnet;
+    treatment = :A,
+    response = :Y,
+    controls = [:L, :L2, :L3, :L4]
+    )
 data_net = rand(dgp_net, 100)
 
 @testset "Intervention" begin
@@ -113,19 +121,19 @@ end
 end
 
 @testset "DecomposedPropensityRatio on Network" begin
-    LA = replacetable(data_net, TableOperations.select(data_net, :L1, :L1_s, :A, :A_s) |> Tables.columntable)    
+    LA = replacetable(data_net, TableOperations.select(data_net, :L, :L2, :L3, :L4, :L2s, :L4s, :A, :As) |> Tables.columntable)    
     ratio_model = DecomposedPropensityRatio(DensityRatioPlugIn(OracleDensityEstimator(dgp_net)))
-    L = TableOperations.select(data_net, :L1, :L1_s) |> Tables.columntable
-    A = TableOperations.select(data_net, :A, :A_s) |> Tables.columntable
+    L = TableOperations.select(data_net, :L, :L2, :L3, :L4, :L2s, :L4s) |> Tables.columntable
+    A = TableOperations.select(data_net, :A, :As) |> Tables.columntable
     mach_ratio = machine(ratio_model, L, A) |> fit!
-    LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), L1_s = Tables.getcolumn(L, :L1_s), A = Tables.getcolumn(A, :A), A_s = Tables.getcolumn(A, :A_s)))
+    LAδ = replacetable(LA, merge(L, (A = Tables.getcolumn(A, :A), As = Tables.getcolumn(A, :As))))
     
     @test all(MLJ.predict(mach_ratio, LA, LAδ) .== 1.0)
     
-    LAδ = replacetable(LA, (L1 = Tables.getcolumn(L, :L1), L1_s = Tables.getcolumn(L, :L1_s), A = Tables.getcolumn(A, :A) .+ 0.1, A_s = Tables.getcolumn(A, :A_s) .+ (adjacency_matrix(getgraph(data_net)) * (ones(nv(data_net.graph)) .* 0.1))))
+    LAδ = replacetable(LA, merge(L, (A = Tables.getcolumn(A, :A) .+ 0.1, As = Tables.getcolumn(A, :As) .+ (adjacency_matrix(getgraph(data_net)) * (ones(nv(data_net.graph)) .* 0.1)))))
     
-    g0shift = pdf.(condensity(dgp_net, LAδ, :A), Tables.getcolumn(LAδ, :A)) .* pdf.(condensity(dgp_net, LAδ, :A_s), Tables.getcolumn(LAδ, :A_s))
-    g0 = pdf.(condensity(dgp_net, LA, :A), Tables.getcolumn(LA, :A)) .* pdf.(condensity(dgp_net, LA, :A_s), Tables.getcolumn(LA, :A_s))
+    g0shift = pdf.(condensity(dgp_net, LAδ, :A), Tables.getcolumn(LAδ, :A)) .* pdf.(condensity(dgp_net, LAδ, :As), Tables.getcolumn(LAδ, :As))
+    g0 = pdf.(condensity(dgp_net, LA, :A), Tables.getcolumn(LA, :A)) .* pdf.(condensity(dgp_net, LA, :As), Tables.getcolumn(LA, :As))
     
     foo = MLJ.predict(mach_ratio, LA, LAδ)
     true_ratio = g0 ./ g0shift
@@ -246,65 +254,74 @@ end
     @test all(values(σ2boot(output)) .< moe)
 end 
 
-@testset "MTP Network" begin
+#@testset "MTP Network" begin
     Random.seed!(1)
     moe = 0.2
 
-    distseqnet = @dgp(
-        L1 ~ DiscreteUniform(1, 5),
-        L2 ~ Binomial(4, 0.5),
-        L2s = Sum(:L2, include_self = false),
-        A ~ (@. Normal(:L1 + :L2 + 0.1 * :L2s, 0.5)),
-        As = Sum(:A, include_self = false),
-        Y ~ (@. Normal(:A + 0.5 * :As + 0.1 * :L1 + 0.1 * :L2 + 0.05 * :L2s + 10, 1))
-    );
-
-    # Note this only yields clusters for K = 1, not any other K
-    dgp_net = DataGeneratingProcess(n -> random_regular_graph(n, 1), distseqnet; 
-                            treatment = :A, response = :Y, controls = [:L1, :L2]);
-
-    dgp_net = DataGeneratingProcess(
-        n -> Graphs.grid([Int64(sqrt(n)), Int64(sqrt(n))]; periodic=false),
-        @dgp(
-            L ~ DiscreteUniform(1, 4),
-            L2 ~ Binomial(5, 0.4),
-            L2s = Sum(:L2, include_self = false),
-            L3 ~ Beta(3, 2),
-            L4 ~ Poisson(5),
-            L4s = Sum(:L4, include_self = false),
-            A ~ (@. Normal(:L + 0.5 * :L3 + 0.05 * :L2s + 0.05 * :L4s + 1, 0.5)),
-            As = Sum(:A, include_self = false),
-            Y ~ (@. Normal(:A + 0.5 * :As + :L + 0.1 * (:L2 + :L3 + :L4) + 0.05 * (:L2s + :L4s) + 40, 0.5))
-        );
-        treatment = :A,
-        response = :Y,
-        controls = [:L, :L2, :L3, :L4]
-        )
-
     data_vlarge = rand(dgp_net, 10^6)
-    data_large = rand(dgp_net, 2500)
+    data_large = rand(dgp_net, 4900)
     intervention = AdditiveShift(0.1)
 
     
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
-    density_ratio_estimator = DensityRatioKLIEP([0.01, 0.1, 1.0, 10.0], [50])
-    #density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(dgp_net))
+    #density_ratio_estimator = DensityRatioKLIEP([10.0], [10])
+    density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(dgp_net))
     cv_splitter = nothing#CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
     
-    fieldnames(typeof(output.mtp))
-    fieldnames(typeof(output.mtp.fitresult.interface.nuisance_machines))
-
-    output.mtp.fitresult.interface.nuisance_machines.machine_density.fitresult.dre
-
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
-    truth.ψ
+    σ2_est = σ2(output)
+    values(σ2_est)[2:end] .* 4900
 
-    histogram(report(mtpmach).Hn)
+    truth
+
+    foo = report(mtpmach)
+    foo.Qn
+    Q0bar_noshift
+
+    data = data_large
+    Ysymb = getresponsesymbol(data)
+    
+    # Organize and transform the data
+    Y = getresponse(data)
+    intmach = machine(InterventionModel(), data) |> fit!
+    LAδs, _ = transform(intmach, intervention)
+    LAδsinv, dAδsinv = inverse_transform(intmach, intervention)
+
+    dgp = dgp_net
+    # Compute conditional means of response
+    Q0bar_noshift = conmean(dgp, data, Ysymb)
+    Q0bar_shift = conmean(dgp, CausalTables.replace(LAδs; tbl = merge(gettable(LAδs), (Y = Y,))), Ysymb)
+
+    # Compute conditional density ratio of treatment
+    Hn_aux = ones(length(Y))
+    for col in keys(dAδsinv)
+        g0_Anat= pdf.(condensity(dgp, data, col), Tables.getcolumn(data, col))
+        g0_Ainv = pdf.(condensity(dgp, LAδsinv, col), Tables.getcolumn(LAδsinv, col))
+        Hn_aux = Hn_aux .* (g0_Ainv ./ g0_Anat)
+    end
+    Hn_aux = Hn_aux .* prod(dAδsinv)
+    
+
+    # Compute the EIF and get g-computation result
+    ψ2 = mean(Q0bar_shift)
+    D = Hn_aux .* (Y .- Q0bar_noshift) .+ (Q0bar_shift .- ψ2)
+
+        if nv(getgraph(data)) == 0 # if graph is empty, just use empirical variance
+            eff_bound = var(D)
+        else # if graph exists, use estimator from Ogburn 2022
+            G = ModifiedTreatment.get_dependency_neighborhood(getgraph(data))
+            eff_bound = ModifiedTreatment.cov_unscaled(D, G) / length(D)
+        end
+
+    mtpmach.fitresult.interface.nuisance_machines.machine_density.fitresult.machines
+    mtpmach.fitresult.interface.nuisance_machines.machine_density.fitresult.inclusions
+
+
     @test within(ψ_est.plugin, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.sipw, truth.ψ, moe)

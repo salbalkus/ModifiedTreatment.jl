@@ -14,13 +14,13 @@ function compute_true_MTP(dgp, data, intervention; direction = :out, controls_ii
 
     # Compute conditional means of response
     Q0bar_noshift = conmean(dgp, data, Ysymb)
-    Q0bar_shift = conmean(dgp, CausalTables.replace(LAδs; tbl = merge(gettable(LAδs), (Y = Y,))), :Y)
+    Q0bar_shift = conmean(dgp, CausalTables.replace(LAδs; tbl = merge(gettable(LAδs), (Y = Y,))), Ysymb)
 
     # Compute conditional density ratio of treatment
     Hn_aux = ones(length(Y))
     for col in keys(dAδsinv)
         g0_Anat= pdf.(condensity(dgp, data, col), Tables.getcolumn(data, col))
-        g0_Ainv = pdf.(condensity(dgp, LAδsinv, col), Tables.getcolumn(LAδs, col))
+        g0_Ainv = pdf.(condensity(dgp, LAδsinv, col), Tables.getcolumn(LAδsinv, col))
         Hn_aux = Hn_aux .* (g0_Ainv ./ g0_Anat)
     end
     Hn_aux = Hn_aux .* prod(dAδsinv)
