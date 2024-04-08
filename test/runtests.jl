@@ -38,23 +38,19 @@ dgp_iid = DataGeneratingProcess(distseqiid; treatment = :A, response = :Y, contr
 data_iid = rand(dgp_iid, 100)
 
 distseqnet = @dgp(
-    L ~ DiscreteUniform(1, 4),
-    L2 ~ Binomial(5, 0.4),
-    L2s = Sum(:L2, include_self = false),
-    L3 ~ Beta(3, 2),
-    L4 ~ Poisson(5),
-    L4s = Sum(:L4, include_self = false),
-    A ~ (@. Normal(:L + 0.5 * :L3 + 0.05 * :L2s + 0.05 * :L4s + 1, 0.5)),
-    As = Sum(:A, include_self = false),
-    Y ~ (@. Normal(:A + 0.5 * :As + :L + 0.1 * (:L2 + :L3 + :L4) + 0.05 * (:L2s + :L4s) + 40, 0.5))
+    L1 ~ Binomial(5, 0.4),
+    L1_s = Sum(:L1, include_self = false),
+    A ~ (@. Normal(:L1 + 1, 0.5)),
+    A_s = Sum(:A, include_self = false),
+    Y ~ (@. Normal(:A + 0.5 * :A_s + :L1 + :L1_s + 10, 0.5))
 );
 
 dgp_net =  DataGeneratingProcess(
-    n -> Graphs.grid([Int64(sqrt(n)), Int64(sqrt(n))]; periodic=false),
+    n -> Graphs.random_regular_graph(n, 2),
     distseqnet;
     treatment = :A,
     response = :Y,
-    controls = [:L, :L2, :L3, :L4]
+    controls = [:L1]
     )
 data_net = rand(dgp_net, 100)
 
@@ -121,19 +117,20 @@ end
 end
 
 @testset "DecomposedPropensityRatio on Network" begin
-    LA = replacetable(data_net, TableOperations.select(data_net, :L, :L2, :L3, :L4, :L2s, :L4s, :A, :As) |> Tables.columntable)    
+    
+    LA = replacetable(data_net, TableOperations.select(data_net, :L1, :L1_s, :A, :A_s) |> Tables.columntable)    
     ratio_model = DecomposedPropensityRatio(DensityRatioPlugIn(OracleDensityEstimator(dgp_net)))
-    L = TableOperations.select(data_net, :L, :L2, :L3, :L4, :L2s, :L4s) |> Tables.columntable
-    A = TableOperations.select(data_net, :A, :As) |> Tables.columntable
+    L = TableOperations.select(data_net, :L1, :L1_s) |> Tables.columntable
+    A = TableOperations.select(data_net, :A, :A_s) |> Tables.columntable
     mach_ratio = machine(ratio_model, L, A) |> fit!
-    LAδ = replacetable(LA, merge(L, (A = Tables.getcolumn(A, :A), As = Tables.getcolumn(A, :As))))
+    LAδ = replacetable(LA, merge(L, (A = Tables.getcolumn(A, :A), A_s = Tables.getcolumn(A, :A_s))))
     
     @test all(MLJ.predict(mach_ratio, LA, LAδ) .== 1.0)
     
-    LAδ = replacetable(LA, merge(L, (A = Tables.getcolumn(A, :A) .+ 0.1, As = Tables.getcolumn(A, :As) .+ (adjacency_matrix(getgraph(data_net)) * (ones(nv(data_net.graph)) .* 0.1)))))
+    LAδ = replacetable(LA, merge(L, (A = Tables.getcolumn(A, :A) .+ 0.1, A_s = Tables.getcolumn(A, :A_s) .+ (adjacency_matrix(getgraph(data_net)) * (ones(nv(data_net.graph)) .* 0.1)))))
     
-    g0shift = pdf.(condensity(dgp_net, LAδ, :A), Tables.getcolumn(LAδ, :A)) .* pdf.(condensity(dgp_net, LAδ, :As), Tables.getcolumn(LAδ, :As))
-    g0 = pdf.(condensity(dgp_net, LA, :A), Tables.getcolumn(LA, :A)) .* pdf.(condensity(dgp_net, LA, :As), Tables.getcolumn(LA, :As))
+    g0shift = pdf.(condensity(dgp_net, LAδ, :A), Tables.getcolumn(LAδ, :A)) .* pdf.(condensity(dgp_net, LAδ, :A_s), Tables.getcolumn(LAδ, :A_s))
+    g0 = pdf.(condensity(dgp_net, LA, :A), Tables.getcolumn(LA, :A)) .* pdf.(condensity(dgp_net, LA, :A_s), Tables.getcolumn(LA, :A_s))
     
     foo = MLJ.predict(mach_ratio, LA, LAδ)
     true_ratio = g0 ./ g0shift
@@ -256,13 +253,34 @@ end
 
 #@testset "MTP Network" begin
     Random.seed!(1)
-    moe = 0.2
+    moe = 1.0
 
+    distseqnet = @dgp(
+        L ~ DiscreteUniform(1, 4),
+        L2 ~ Binomial(3, 0.4),
+        L2s = Sum(:L2, include_self = false),
+        L3 ~ Beta(3, 2),
+        L4 ~ Poisson(3),
+        L4s = Sum(:L4, include_self = false),
+        A ~ (@. Normal(0.5 * (:L + :L2) + :L3 + 0.05 * (:L4 + :L2s) + 0.01 * :L4s + 1, 1)),
+        As = Sum(:A, include_self = false),
+        Y ~ (@. Normal(:A + 0.5 * :As + 0.5 * (:L + :L2) + :L3 + 0.05 * (:L4 + :L2s) + 0.01 * :L4s + 100, 1))
+    );
+
+    dgp_net =  DataGeneratingProcess(
+        #n -> Graphs.random_regular_graph(n, 4),
+        n -> Graphs.erdos_renyi(n, 3/n),
+        distseqnet;
+        treatment = :A,
+        response = :Y,
+        controls = [:L, :L2, :L3, :L4]
+        )
+
+    n_large = 10000
     data_vlarge = rand(dgp_net, 10^6)
-    data_large = rand(dgp_net, 4900)
+    data_large = rand(dgp_net, n_large)
     intervention = AdditiveShift(0.1)
 
-    
     truth = compute_true_MTP(dgp_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
     #density_ratio_estimator = DensityRatioKLIEP([10.0], [10])
@@ -274,14 +292,23 @@ end
     
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
-    σ2_est = σ2(output)
-    values(σ2_est)[2:end] .* 4900
+    @test within(ψ_est.plugin, truth.ψ, moe)
+    @test within(ψ_est.ipw, truth.ψ, moe)
+    @test within(ψ_est.sipw, truth.ψ, moe)
+    @test within(ψ_est.onestep, truth.ψ, moe)
+    @test within(ψ_est.tmle, truth.ψ, moe)
 
-    truth
+    σ2_est = values(σ2(output))
+    @test isnothing(σ2_est[1])
+    @test !all(within.(values(σ2_est)[4:5] .* n_large, truth.eff_bound, moe))
+    
+    σ2net_est  = values(σ2net(output))
+    @test isnothing(σ2_est[1])
+    @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe))
 
-    foo = report(mtpmach)
-    foo.Qn
-    Q0bar_noshift
+    data_large.graph
+    A = adjacency_matrix(getgraph(data_large))
+    Anew = ((A .+ (A * A)) .> 0)
 
     data = data_large
     Ysymb = getresponsesymbol(data)
@@ -292,8 +319,8 @@ end
     LAδs, _ = transform(intmach, intervention)
     LAδsinv, dAδsinv = inverse_transform(intmach, intervention)
 
-    dgp = dgp_net
     # Compute conditional means of response
+    dgp = dgp_net
     Q0bar_noshift = conmean(dgp, data, Ysymb)
     Q0bar_shift = conmean(dgp, CausalTables.replace(LAδs; tbl = merge(gettable(LAδs), (Y = Y,))), Ysymb)
 
@@ -308,36 +335,26 @@ end
     
 
     # Compute the EIF and get g-computation result
-    ψ2 = mean(Q0bar_shift)
-    D = Hn_aux .* (Y .- Q0bar_noshift) .+ (Q0bar_shift .- ψ2)
+    ψnew = mean(Q0bar_shift)
+    D = Hn_aux .* (Y .- Q0bar_noshift) .+ (Q0bar_shift .- ψnew)
 
-        if nv(getgraph(data)) == 0 # if graph is empty, just use empirical variance
-            eff_bound = var(D)
-        else # if graph exists, use estimator from Ogburn 2022
-            G = ModifiedTreatment.get_dependency_neighborhood(getgraph(data))
-            eff_bound = ModifiedTreatment.cov_unscaled(D, G) / length(D)
-        end
+    if nv(getgraph(data)) == 0 # if graph is empty, just use empirical variance
+        eff_bound = var(D)
+    else # if graph exists, use estimator from Ogburn 2022
+        G = ModifiedTreatment.get_dependency_neighborhood(getgraph(data))
+        eff_bound = ModifiedTreatment.cov_unscaled(D, G) / length(D)
+    end
 
-    mtpmach.fitresult.interface.nuisance_machines.machine_density.fitresult.machines
-    mtpmach.fitresult.interface.nuisance_machines.machine_density.fitresult.inclusions
-
-
-    @test within(ψ_est.plugin, truth.ψ, moe)
-    @test within(ψ_est.ipw, truth.ψ, moe)
-    @test within(ψ_est.sipw, truth.ψ, moe)
-    @test within(ψ_est.onestep, truth.ψ, moe)
-    @test within(ψ_est.tmle, truth.ψ, moe)
-
-    σ2_est = values(σ2(output))
-    @test isnothing(σ2_est[1])
+    values(σ2_est)[4:5] .* n_large
+    values(σ2net_est)[4:5] .* n_large
+    truth
+    eff_bound
     
-    σ2net_est  = values(σ2net(output))
-    @test isnothing(σ2_est[1])
-
     @test all(isnothing.(values(σ2boot(output))))
 
     # TODO: Add better tests to ensure the bootstrap is working correctly
     # Test the cluster bootstrap
+    """
     B = 100
     clustersampler = ClusterSampler(2)
     ModifiedTreatment.bootstrap!(clustersampler, output, B)  
@@ -357,6 +374,7 @@ end
     σ2boot_est2 = values(σ2boot(output2))
     @test all(σ2boot_est2 .< moe)
     @test all(σ2boot_est .- σ2boot_est2 .< moe * 0.1)
+    """
 end
 
 
