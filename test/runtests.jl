@@ -40,9 +40,10 @@ data_iid = rand(dgp_iid, 100)
 distseqnet = @dgp(
     L1 ~ Binomial(5, 0.4),
     L1_s = Sum(:L1, include_self = false),
+    F = Friends(),
     A ~ (@. Normal(:L1 + 1, 0.5)),
     A_s = Sum(:A, include_self = false),
-    Y ~ (@. Normal(:A + 0.5 * :A_s + :L1 + :L1_s + 10, 0.5))
+    Y ~ (@. Normal(:A + 0.5 * :A_s + :L1 + :L1_s + :F + 10, 0.5))
 );
 
 dgp_net =  DataGeneratingProcess(
@@ -98,10 +99,10 @@ end
 @testset "InterventionModel" begin
     intervention = LinearShift(1.5, 0.5)
     intmach = machine(InterventionModel(), data_net) |> fit!
-    LAs, Ls, As = predict(intmach, intervention) 
-    @test gettable(Ls) == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s)
+    LAs, Ls, As = predict(intmach, intervention)
+    @test gettable(Ls) == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, F = data_net.tbl.F,)
     @test As == (A = data_net.tbl.A, A_s = data_net.tbl.A_s,)
-    @test gettable(LAs) == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, A = data_net.tbl.A, A_s = data_net.tbl.A_s)
+    @test gettable(LAs) == (L1 = data_net.tbl.L1, L1_s = data_net.tbl.L1_s, F = data_net.tbl.F, A = data_net.tbl.A, A_s = data_net.tbl.A_s)
     
     LAδs, dAδs = transform(intmach, intervention)
     @test LAδs.tbl.A ≈ (data_net.tbl.A .* 1.5) .+ 0.5

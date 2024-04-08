@@ -29,7 +29,10 @@ function get_summarized_data(O)
 
     # Collect names of the variables being summarized and the treatment
     summaries = getsummaries(Os)
-    summarizedvars = NamedTuple([CausalTables.get_var_to_summarize(val) => key for (key, val) in pairs(summaries)])
+
+    # TODO: Change the line below to accommodate summaries besides Friends that are not based on IID RVs
+    summarizedvars = NamedTuple([CausalTables.get_var_to_summarize(val) => key for (key, val) in pairs(summaries) if !(typeof(val) <: Friends)])
+    newsummaryvars = setdiff(keys(summaries), values(summarizedvars))
     treatmentvar = gettreatmentsymbol(Os)
     controlssymbols = getcontrolssymbols(Os)
 
@@ -49,7 +52,7 @@ function get_summarized_data(O)
     end
 
     # Extract the summarized controls into L
-    L = TableOperations.select(Os, vcat(controlssymbols, [k[2] for k in pairs(summarizedvars) if k[1] ∈ controlssymbols])...) |> Tables.columntable
+    L = TableOperations.select(Os, vcat(controlssymbols, [k[2] for k in pairs(summarizedvars) if k[1] ∈ controlssymbols], newsummaryvars)...) |> Tables.columntable
     LAs = merge(L, A)
     
     return replacetable(Os, LAs), A, replacetable(Os, L), summaries, treatmentvar, summarizedvars
