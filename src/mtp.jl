@@ -88,7 +88,7 @@ function get_dependency_neighborhood(g::Network)
     # directly return the adjacency matrix
     # WARNING: If a graph is constructed from this output, the 1-diagonal will be converted to a 0-diagonal
     # and subsequently matrix multiplications may be incorrect if a 1-diagonal was assumed
-    return A
+    return Anew
 end
 get_dependency_neighborhood(g::Node) = node(g -> get_dependency_neighborhood(g), g)
 
