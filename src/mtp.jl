@@ -72,7 +72,7 @@ estimate(machine::Machine, δnew::Intervention) = MTPResult(
 # Define custom function to extract the nuisance estimators from the learning network machine
 nuisance_machines(machine::Machine{MTP}) = MLJBase.unwrap(machine.fitresult).nuisance_machines
 
-function get_dependency_neighborhood(g::Network)
+function get_dependency_neighborhood(g::AbstractGraphOrNothing)
     # Only compute if a graph is passed in
     if isnothing(g)
         return nothing

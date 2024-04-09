@@ -24,7 +24,7 @@ module ModifiedTreatment
 
     # Define custom types
     Estimate = Union{Float64, Nothing}
-    Network = Union{Graph, Nothing}
+    AbstractGraphOrNothing = Union{AbstractGraph, Nothing}
 
     include("nodeutils.jl")
     export gettreatment, getresponse, getgraph, getsummaries, summarize
