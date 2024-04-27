@@ -320,6 +320,20 @@ end
     @test isnothing(σ2_est[1])
     @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe))
 
+    ψvec = Vector{Float64}(undef, 100)
+    σ2vec = Vector{Float64}(undef, 100)
+
+    for i in 1:100
+        data = rand(dgp_net, 1000)
+        mtpmach = machine(mtp, data, intervention) |> fit!
+        output = ModifiedTreatment.estimate(mtpmach, intervention)
+        ψvec[i] = ψ(output)[5]
+        σ2vec[i] = σ2net(output)[5]
+    end
+
+    var(ψvec)
+    mean(σ2vec)
+
     data_large.graph
     A = adjacency_matrix(getgraph(data_large))
     Anew = ((A .+ (A * A)) .> 0)
