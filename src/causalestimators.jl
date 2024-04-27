@@ -79,9 +79,9 @@ function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
 end
 
 function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix, condmean_Qδn::Array)
-    D = eif(Hn, Y, Qn, condmean_Qδn)
-    ψ = mean(D)
-    D = D .- ψ
+    D1 = eif(Hn, Y, Qn, Qδn)
+    ψ = mean(D1)
+    D = eif(Hn, Y, Qn, condmean_Qδn) .- ψ
     σ2 = mean(D.^2) / length(D)
     if isnothing(G) || size(G, 1) == 0
         return OneStepResult(ψ, σ2)

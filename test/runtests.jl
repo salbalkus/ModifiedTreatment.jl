@@ -268,13 +268,22 @@ end
         Y ~ (@. Normal(:A + 0.5 * :As + 0.5 * (:L + :L2) + :L3 + 0.05 * (:L4 + :L2s) + 0.01 * :L4s + 100, 1))
     );
 
+    distseqnet = @dgp(
+        L ~ DiscreteUniform(1, 4),
+        L2 ~ Binomial(3, 0.4),
+        L3 ~ Beta(3, 2),
+        A ~ (@. Normal(0.5 * (:L + :L2) + :L3 + 1, 1)),
+        As = Sum(:A, include_self = false),
+        Y ~ (@. Normal(:A + 0.5 * :As + 0.5 * (:L + :L2) + :L3 + 100, 1))
+    );
+
     dgp_net =  DataGeneratingProcess(
         #n -> Graphs.random_regular_graph(n, 4),
         n -> Graphs.erdos_renyi(n, 3/n),
         distseqnet;
         treatment = :A,
         response = :Y,
-        controls = [:L, :L2, :L3, :L4]
+        controls = [:L, :L2, :L3]
         )
 
     n_large = 10000
@@ -290,6 +299,9 @@ end
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
+
+    using Plots
+    scatter(report(mtpmach).condmean_Qδn, report(mtpmach).Qδn)
     
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
