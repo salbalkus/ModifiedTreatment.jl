@@ -1,4 +1,17 @@
 
+eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
+
+function quasi_jackknife(Hn::Array, Y::Array, Qn::Array, Qδn::Array, G::AbstractMatrix)
+    n = length(Y)
+    D_ipw = Hn .* (Y .- Qn)
+    D_ipw = D_ipw .- mean(D_ipw)
+    D_pi = Qδn .- mean(Qδn)
+
+    σ2_unscaled = (transpose(D_ipw) * G * D_ipw) + (transpose(D_pi) * G * D_pi) - (transpose(D_ipw) * G * D_pi) - (transpose(D_pi) * G * D_ipw)
+
+    return(σ2_unscaled / (n^2))
+end
+
 
 # CausalEstimatorResult objects
 abstract type CausalEstimatorResult end
@@ -44,8 +57,6 @@ TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
 # functions to compute estimators from nuisance parameters
 
-eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
-
 plugin_transform(Qδn::Vector) = PlugInResult(mean(Qδn))
 plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 
@@ -86,7 +97,7 @@ function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
     if isnothing(G) || size(G, 1) == 0
         return OneStepResult(ψ, σ2)
     else
-        σ2net = cov_unscaled(D, G) / (length(D)^2)
+        σ2net = quasi_jackknife(Hn, Y, Qn, Qδn, G)
         return OneStepResult(ψ, σ2, σ2net)
     end
 end
@@ -119,7 +130,7 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     if isnothing(G) || size(G, 1) == 0
         return TMLEResult(ψ, σ2)
     else
-        σ2net = cov_unscaled(D, G) / (length(D)^2)
+        σ2net = quasi_jackknife(Hn, Y, Qn, Qδn, G)
         return TMLEResult(ψ, σ2, σ2net)
     end
 end

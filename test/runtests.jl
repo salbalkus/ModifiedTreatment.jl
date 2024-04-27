@@ -268,13 +268,22 @@ end
         Y ~ (@. Normal(:A + 0.5 * :As + 0.5 * (:L + :L2) + :L3 + 0.05 * (:L4 + :L2s) + 0.01 * :L4s + 100, 1))
     );
 
+    distseqnet = @dgp(
+        L ~ DiscreteUniform(1, 4),
+        L2 ~ Binomial(3, 0.4),
+        L3 ~ Beta(3, 2),
+        A ~ (@. Normal(0.5 * (:L + :L2) + :L3 + 1, 1)),
+        As = Sum(:A, include_self = false),
+        Y ~ (@. Normal(:A + 0.5 * :As + 0.5 * (:L + :L2) + :L3 + 100, 1))
+    );
+
     dgp_net =  DataGeneratingProcess(
         #n -> Graphs.random_regular_graph(n, 4),
         n -> Graphs.erdos_renyi(n, 3/n),
         distseqnet;
         treatment = :A,
         response = :Y,
-        controls = [:L, :L2, :L3, :L4]
+        controls = [:L, :L2, :L3]
         )
 
     n_large = 10000
@@ -306,6 +315,27 @@ end
     σ2net_est  = values(σ2net(output))
     @test isnothing(σ2_est[1])
     @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe))
+
+    r = report(mtpmach)
+    Y = data_large.tbl.Y
+    Hn = r.Hn
+    Qn = r.Qn
+    Qδn = r.Qδn
+    G = ModifiedTreatment.get_dependency_neighborhood(getgraph(data_large))
+
+    ModifiedTreatment.quasi_jackknife(Hn::Array, Y::Array, Qn::Array, Qδn::Array, G::AbstractMatrix)
+
+    n = length(Y)
+    ipw_estimating_eq = Hn .* (Y .- Qn)
+    ψ_ipw = mean(ipw_estimating_eq)
+    ψsum_plugin = sum(Qδn)
+    ψ_plugin_jackknife = (Qδn .- ψsum_plugin) ./ (n - 1)
+    D = ipw_estimating_eq .- ψ_ipw .+ ψ_plugin_jackknife
+
+    D2 = ModifiedTreatment.eif(Hn, Y, Qn, Qδn)
+
+    return(cov_unscaled(D, G) / (n^2))
+
 
     data_large.graph
     A = adjacency_matrix(getgraph(data_large))
