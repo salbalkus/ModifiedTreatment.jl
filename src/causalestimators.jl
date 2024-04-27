@@ -78,8 +78,8 @@ function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
     end
 end
 
-function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
-    D = eif(Hn, Y, Qn, Qδn)
+function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix, condmean_Qδn::Array)
+    D = eif(Hn, Y, Qn, condmean_Qδn)
     ψ = mean(D)
     D = D .- ψ
     σ2 = mean(D.^2) / length(D)
@@ -91,15 +91,15 @@ function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
     end
 end
 
-function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::AbstractMatrix)
+function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::AbstractMatrix, condmean_Qδn::Array)
     scaler = StatsBase.fit(UnitRangeTransform, Y, dims = 1)
     Y01 = StatsBase.transform(scaler, Y)
     Qn01 = StatsBase.transform(scaler, Qn)
     bound!(Qn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
-    return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, G, scaler)
+    return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, G, scaler, condmean_Qδn)
 end
 
-function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::AbstractMatrix, scaler)
+function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::AbstractMatrix, scaler, condmean_Qδn::Array)
     fit_data = MLJBase.table(hcat(Y01, Hn), names = ["Y", "Hn"])
     # Fit the logistic regression model
     # The 0 + is needed to fit the model with an intercept of 0
@@ -114,7 +114,7 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     ψ = mean(Qstar)
 
     # Estimate variance
-    D = eif(Hn, Y, Qn, Qδn) .- ψ
+    D = eif(Hn, Y, Qn, condmean_Qδn) .- ψ
     σ2 = mean(D.^2) / length(D)
     if isnothing(G) || size(G, 1) == 0
         return TMLEResult(ψ, σ2)
@@ -135,7 +135,7 @@ MMI.transform(::IPW, fitresult, Hn, stabilized) = stabilized ? sipw(fitresult.Y,
 
 mutable struct OneStep <: CausalEstimator end
 MMI.fit(::OneStep, verbosity, Y, Qn, G) = (fitresult = (; Y = Y, Qn = Qn, G = G), cache = nothing, report = nothing)
-MMI.transform(::OneStep, fitresult, Qδn, Hn) = onestep(fitresult.Y, fitresult.Qn, Qδn, Hn, fitresult.G)
+MMI.transform(::OneStep, fitresult, Qδn, Hn, condmean_Qδn) = onestep(fitresult.Y, fitresult.Qn, Qδn, Hn, fitresult.G, condmean_Qδn)
 
 mutable struct TMLE <: CausalEstimator end
 
@@ -147,7 +147,7 @@ function MMI.fit(::TMLE, verbosity, Y, Qn, G)
     (fitresult = (; Y = Y, Qn = Qn, Y01 = Y01, Qn01 = Qn01, G = G, scaler = scaler), cache = nothing, report = nothing)
 end
 
-MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn) = tmle_fromscaled(fitresult.Y, fitresult.Qn, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.G, fitresult.scaler)
+MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn, condmean_Qδn) = tmle_fromscaled(fitresult.Y, fitresult.Qn, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.G, fitresult.scaler, condmean_Qδn)
 
 mutable struct MultiplierBootstrap <: CausalEstimator 
     B::Int

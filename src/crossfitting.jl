@@ -29,6 +29,7 @@ end
 function MMI.fit(dp::DecomposedPropensityRatio, verbosity, X, Y)
 
     # ASSUME that treatment names are in REVERSE order of conditional dependence
+    # TODO: fix this!
     cur_treatment_names = reverse(Tables.columnnames(Y))
     XY = merge(Tables.columntable(X), Tables.columntable(Y))
     all_col_names = Tables.columnnames(XY)

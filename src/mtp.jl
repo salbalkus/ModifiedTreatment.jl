@@ -22,10 +22,13 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     
     # Fit and estimate nuisance parameters
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)
-    Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
+    Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)    
 
     # Get causal estimates
-    plugin_est, ipw_est, sipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
+    mach_mean2 = crossfit_extramean(mtp, Ls, Qδn)
+    condmean_Qδn = MMI.predict(mach_mean2, Ls)   
+    plugin_est, ipw_est, sipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn, condmean_Qδn)
+
 
     return (; 
         plugin = plugin_est,
@@ -43,10 +46,13 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
             Qδn = Qδn,
             Hn = Hn,
             Hshiftn = Hshiftn,
+            condmean_Qδn = condmean_Qδn,
         ),
         nuisance_machines = (;
             machine_mean = mach_mean,
+            mach_mean2 = mach_mean2,
             machine_density = mach_density,
+
         )
     )    
 
@@ -148,6 +154,17 @@ function crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)
     return mach_mean, mach_density
 end
 
+function crossfit_extramean(mtp, Ls, Qδn)
+    if isnothing(mtp.cv_splitter)
+        mean2_model = mtp.mean_estimator
+    else
+        mean2_model = CrossFitModel(mtp.mean_estimator, mtp.cv_splitter)
+    end
+    mach_mean2 = machine(mean2_model, Ls, Qδn)
+    return mach_mean2
+end
+
+
 function estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
     # Get Conditional Mean
     Qn = MMI.predict(mach_mean, LAs)
@@ -162,7 +179,7 @@ function estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs
     return Qn, Qδn, Hn, Hshiftn
 end
 
-function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
+function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn, condmean_Qδn)
     mach_ipw = machine(IPW(), Y, G) |> fit!
     mach_onestep = machine(OneStep(), Y, Qn, G) |> fit!
     mach_tmle = machine(TMLE(), Y, Qn, G) |> fit!
@@ -170,8 +187,8 @@ function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
     plugin_est = plugin_transform(Qδn)
     ipw_est = node(Hn -> MMI.transform(mach_ipw, Hn, false), Hn)
     sipw_est =  node(Hn -> MMI.transform(mach_ipw, Hn, true), Hn)
-    onestep_est = MMI.transform(mach_onestep, Qδn, Hn)
-    tmle_est = MMI.transform(mach_tmle, Qδn, Hn, Hshiftn)
+    onestep_est = MMI.transform(mach_onestep, Qδn, Hn, condmean_Qδn)
+    tmle_est = MMI.transform(mach_tmle, Qδn, Hn, Hshiftn, condmean_Qδn)
 
     return plugin_est, ipw_est, sipw_est, onestep_est, tmle_est
 end
