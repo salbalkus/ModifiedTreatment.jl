@@ -1,4 +1,5 @@
 using Test
+using Revise
 using ModifiedTreatment
 using CausalTables
 using Distributions

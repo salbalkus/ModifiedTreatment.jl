@@ -90,6 +90,7 @@ function get_dependency_neighborhood(g::AbstractGraphOrNothing)
     # add them to the original,
     # and return edge weights to 1
     Anew = ((A .+ (A * A)) .> 0)
+    Anew[diagind(Anew)] .= 1
 
     # directly return the adjacency matrix
     # WARNING: If a graph is constructed from this output, the 1-diagonal will be converted to a 0-diagonal
