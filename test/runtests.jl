@@ -1,4 +1,5 @@
 using Test
+using Revise
 using ModifiedTreatment
 using CausalTables
 using Distributions
@@ -321,15 +322,13 @@ end
     σ2vec = Vector{Float64}(undef, 100)
 
     for i in 1:100
-        data = rand(dgp_net, 1000)
+        data = rand(dgp_net, 10000)
         mtpmach = machine(mtp, data, intervention) |> fit!
         output = ModifiedTreatment.estimate(mtpmach, intervention)
         ψvec[i] = ψ(output)[5]
-        σ2vec[i] = σ2(output)[5]
+        σ2vec[i] = σ2net(output)[5]
     end
 
-    var(ψvec)
-    mean(σ2vec)
 
     A = adjacency_matrix(getgraph(data_large))
     Anew = ((A .+ (A * A)) .> 0)
