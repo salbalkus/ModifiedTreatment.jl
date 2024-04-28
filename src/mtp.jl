@@ -19,13 +19,13 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     Y = getresponse(Os)
     G = get_dependency_neighborhood(getgraph(Os))
 
-    stand = Standardizer();
-    Os_table = CausalTables.gettable(Os)
-    Os_table_white = transform(fit!(machine(stand, Os_table)), Os_table)
-    Os_white = CausalTables.replacetable(Os, Os_table_white)
+    #stand = Standardizer();
+    #Os_table = CausalTables.gettable(Os)
+    #Os_table_white = transform(fit!(machine(stand, Os_table)), Os_table)
+    #Os_white = CausalTables.replacetable(Os, Os_table_white)
 
     model_intervention = InterventionModel()
-    LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os_white, δ)
+    LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
     
     # Fit and estimate nuisance parameters
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)

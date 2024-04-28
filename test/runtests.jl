@@ -269,36 +269,26 @@ end
         Y ~ (@. Normal(:A + 0.5 * :As + 0.5 * (:L + :L2) + :L3 + 0.05 * (:L4 + :L2s) + 0.01 * :L4s + 100, 1))
     );
 
+    distseqnet = @dgp(
+        L1 ~ Normal(0, 2),
+        L2 ~ Normal(1, 1),
+        L3 ~ Bernoulli(0.3),
+        L4 ~ Bernoulli(0.6),
+        A ~ (@. Normal(0.5 * (:L1 + :L2 + :L3) + 0.1 * :L4 + 1, 1)),
+        As = Sum(:A, include_self = false),
+        Y ~ (@. Normal(:A + :As + 0.1 * :L1 + 0.2 * :L2 + 0.1 * :L3 + 0.2 * :L4 + 100, 1))
+    );
+
     dgp_net =  DataGeneratingProcess(
         #n -> Graphs.random_regular_graph(n, 4),
         n -> Graphs.erdos_renyi(n, 3/n),
         distseqnet;
         treatment = :A,
         response = :Y,
-        controls = [:L, :L2, :L3, :L4, :L5, :L6, :L7]
+        controls = [:L1, :L2, :L3, :L4]
         )
 
-
-    dgp_net = DataGeneratingProcess(
-        n -> Graphs.erdos_renyi(n, 4/n),
-        @dgp(
-            L1 ~ Normal(0, 2),
-            L2 ~ Normal(1, 1),
-            L3 ~ Normal(1, 1),
-            L4 ~ Bernoulli(0.3),
-            L5 ~ Bernoulli(0.3),
-            L6 ~ Bernoulli(0.6),
-            L7 ~ Bernoulli(0.6),
-            A ~ (@. Normal(0.5 * (:L1 - :L2 - :L3) + :L4 - :L5 + :L6 - :L7, 1)),
-            As = Sum(:A, include_self = false),
-            Y ~ (@. Normal(:A + :As + 0.5 * (:L1 + :L2 + :L3) + 0.2 * :L4 + :L5 + 0.2 * :L6 + :L7 + 100, 1))
-        );
-    treatment = :A,
-    response = :Y,
-    controls = [:L1, :L2, :L3, :L4, :L5, :L6, :L7]
-    )
-
-    n_large = 10000
+    n_large = 1000
     data_vlarge = rand(dgp_net, 10^6)
     data_large = rand(dgp_net, n_large)
     intervention = AdditiveShift(0.1)
@@ -314,11 +304,14 @@ end
     
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
+    truth
     @test within(ψ_est.plugin, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.sipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
+
+   
 
     σ2_est = values(σ2(output))
     @test isnothing(σ2_est[1])
@@ -327,7 +320,6 @@ end
     σ2net_est  = values(σ2net(output))
     @test isnothing(σ2_est[1])
     @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe))
-
 
     ψvec = Vector{Float64}(undef, 100)
     σ2vec = Vector{Float64}(undef, 100)
@@ -339,7 +331,7 @@ end
         ψvec[i] = ψ(output)[5]
         σ2vec[i] = σ2net(output)[5]
     end
-
+    ψvec
     var(ψvec)
     mean(σ2vec)
 
