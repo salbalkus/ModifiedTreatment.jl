@@ -5,6 +5,8 @@ mutable struct MTP <: UnsupervisedNetworkComposite
     confidence::Float64
 end
 
+CausalTables.gettable(x::AbstractNode) = node(x -> CausalTables.gettable(x), x)
+CausalTables.replacetable(x::AbstractNode, table::AbstractNode) = node((x, table) -> CausalTables.replacetable(x, table), x, table)
 MTP(mean_estimator, density_ratio_estimator, cv_splitter) = MTP(mean_estimator, density_ratio_estimator, cv_splitter, 0.95)
 
 function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
@@ -14,11 +16,16 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
 
     δ = source(Δ)
     Os = source(O)
-
     Y = getresponse(Os)
     G = get_dependency_neighborhood(getgraph(Os))
+
+    stand = Standardizer();
+    Os_table = CausalTables.gettable(Os)
+    Os_table_white = transform(fit!(machine(stand, Os_table)), Os_table)
+    Os_white = CausalTables.replacetable(Os, Os_table_white)
+
     model_intervention = InterventionModel()
-    LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
+    LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os_white, δ)
     
     # Fit and estimate nuisance parameters
     mach_mean, mach_density = crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)

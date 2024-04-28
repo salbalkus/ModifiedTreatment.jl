@@ -269,23 +269,34 @@ end
         Y ~ (@. Normal(:A + 0.5 * :As + 0.5 * (:L + :L2) + :L3 + 0.05 * (:L4 + :L2s) + 0.01 * :L4s + 100, 1))
     );
 
-    distseqnet = @dgp(
-        L ~ DiscreteUniform(1, 4),
-        L2 ~ Binomial(3, 0.4),
-        L3 ~ Beta(3, 2),
-        A ~ (@. Normal(0.5 * (:L + :L2) + :L3 + 1, 1)),
-        As = Sum(:A, include_self = false),
-        Y ~ (@. Normal(:A + 0.5 * :As + 0.5 * (:L + :L2) + :L3 + 100, 1))
-    );
-
     dgp_net =  DataGeneratingProcess(
         #n -> Graphs.random_regular_graph(n, 4),
         n -> Graphs.erdos_renyi(n, 3/n),
         distseqnet;
         treatment = :A,
         response = :Y,
-        controls = [:L, :L2, :L3]
+        controls = [:L, :L2, :L3, :L4, :L5, :L6, :L7]
         )
+
+
+    dgp_net = DataGeneratingProcess(
+        n -> Graphs.erdos_renyi(n, 4/n),
+        @dgp(
+            L1 ~ Normal(0, 2),
+            L2 ~ Normal(1, 1),
+            L3 ~ Normal(1, 1),
+            L4 ~ Bernoulli(0.3),
+            L5 ~ Bernoulli(0.3),
+            L6 ~ Bernoulli(0.6),
+            L7 ~ Bernoulli(0.6),
+            A ~ (@. Normal(0.5 * (:L1 - :L2 - :L3) + :L4 - :L5 + :L6 - :L7, 1)),
+            As = Sum(:A, include_self = false),
+            Y ~ (@. Normal(:A + :As + 0.5 * (:L1 + :L2 + :L3) + 0.2 * :L4 + :L5 + 0.2 * :L6 + :L7 + 100, 1))
+        );
+    treatment = :A,
+    response = :Y,
+    controls = [:L1, :L2, :L3, :L4, :L5, :L6, :L7]
+    )
 
     n_large = 10000
     data_vlarge = rand(dgp_net, 10^6)
@@ -322,13 +333,15 @@ end
     σ2vec = Vector{Float64}(undef, 100)
 
     for i in 1:100
-        data = rand(dgp_net, 10000)
+        data = rand(dgp_net, 1000)
         mtpmach = machine(mtp, data, intervention) |> fit!
         output = ModifiedTreatment.estimate(mtpmach, intervention)
         ψvec[i] = ψ(output)[5]
         σ2vec[i] = σ2net(output)[5]
     end
 
+    var(ψvec)
+    mean(σ2vec)
 
     A = adjacency_matrix(getgraph(data_large))
     Anew = ((A .+ (A * A)) .> 0)

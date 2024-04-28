@@ -3,6 +3,7 @@ module ModifiedTreatment
     using MLJModelInterface
     using MLJTuning
     using MLJBase
+    import MLJModels: Standardizer
     using StatisticalMeasures
     using GLM
     using StatsBase
