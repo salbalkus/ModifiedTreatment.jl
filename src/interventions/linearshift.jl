@@ -23,8 +23,8 @@ end
 AdditiveShift(δ::InterventionParam) = LinearShift(1.0, δ)
 MultiplicativeShift(δ::InterventionParam) = LinearShift(δ, 0.0)
 
-apply_intervention(intervention::LinearShift, A, L) =  A .* intervention.δa(L) .+ intervention.δb(L)
-differentiate_intervention(intervention::LinearShift, A, L) = intervention.δa(L)
+apply_intervention(intervention::LinearShift, L, A) =  A .*  intervention.δa(L) .+ intervention.δb(L)
+differentiate_intervention(intervention::LinearShift, L, A) = intervention.δa(L)
 
 function inverse(intervention::LinearShift)
     δa_new = intervention.δa_is_constant ? 1.0 ./ intervention.δa(0) : L -> 1.0 ./ intervention.δa(L)
@@ -34,7 +34,7 @@ end
 
 function get_induced_intervention(intervention::LinearShift, summary::Sum)
     if intervention.δa_is_constant
-        return LinearShift(intervention.δa, L -> (Graphs.adjacency_matrix(getgraph(L)) * (ones(nv(getgraph(L))) .* intervention.δb(L))) .+ (summary.include_self ? intervention.δb(L) : 0))
+        return LinearShift(intervention.δa, L -> (L.arrays[summary.matrix] * (ones(size(L.arrays[summary.matrix], 1)) .* intervention.δb(L))))# .+ (summary.include_self ? intervention.δb(L) : 0))
     else
         error("A dynamic multiplicative intervention with a Sum is not invertible, and is therefore not a valid MTP.")
     end

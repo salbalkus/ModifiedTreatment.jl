@@ -1,5 +1,4 @@
 using Test
-using Revise
 using ModifiedTreatment
 using CausalTables
 using Distributions
@@ -7,9 +6,9 @@ using Graphs
 using Condensity
 using Tables
 using TableOperations
-using DataAPI
 using MLJ
 using DensityRatioEstimation
+using DataAPI
 
 # Regressors
 DeterministicConstantRegressor = @load DeterministicConstantRegressor pkg=MLJModels
@@ -30,31 +29,31 @@ Random.seed!(1)
 # function for testing approximate equality of statistical estimators
 within(x, truth, ϵ) = abs(x - truth) < ϵ
 
-distseqiid = [
-    :L1 => (; O...) -> DiscreteUniform(1, 5),
-    :A => (; O...) -> (@. Normal(O[:L1], 1)),
-    :Y => (; O...) -> (@. Normal(O[:A] + 0.5 * O[:L1] + 10, 0.5))
-]
-dgp_iid = DataGeneratingProcess(distseqiid; treatment = :A, response = :Y, controls = [:L1]);
-data_iid = rand(dgp_iid, 100)
+dgp_iid = @dgp(
+    L1 ~ DiscreteUniform(1, 5),
+    A ~ (@. Normal(L1, 1)),
+    Y ~ (@. Normal(A + 0.5 * L1 + 10, 0.5))
+)
+scm_iid = StructuralCausalModel(dgp_iid; treatment = :A, response = :Y, confounders = [:L1]);
+data_iid = rand(scm_iid, 100)
 
-distseqnet = @dgp(
+dgp_net = @dgp(
     L1 ~ Binomial(5, 0.4),
-    L1_s = Sum(:L1, include_self = false),
-    F = Friends(),
-    A ~ (@. Normal(:L1 + 1, 0.5)),
-    A_s = Sum(:A, include_self = false),
-    Y ~ (@. Normal(:A + 0.5 * :A_s + :L1 + :L1_s + :F + 10, 0.5))
+    ER = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(L1), 2)),
+    L1_s $ Sum(:L1, :ER),
+    F $ Friends(:ER),
+    A ~ (@. Normal(L1 + 1, 0.5)),
+    A_s $ Sum(:A, :ER),
+    Y ~ (@. Normal(A + 0.5 * A_s + L1 + L1_s + F + 10, 0.5))
 );
 
-dgp_net =  DataGeneratingProcess(
-    n -> Graphs.random_regular_graph(n, 2),
-    distseqnet;
+scm_net =  StructuralCausalModel(
+    dgp_net;
     treatment = :A,
     response = :Y,
-    controls = [:L1]
+    confounders = [:L1]
     )
-data_net = rand(dgp_net, 100)
+data_net = rand(scm_net, 100)
 
 @testset "Intervention" begin
     m = 1.5
@@ -66,35 +65,32 @@ data_net = rand(dgp_net, 100)
     inv_int1 = inverse(int1)
     inv_int2 = inverse(int2)
     inv_int3 = inverse(int3)
-
-    L = CausalTables.getcontrols(data_net)
-    A = CausalTables.gettreatment(data_net)
-
-    @test apply_intervention(int1, A, L) ≈ A .+ 0.5
-    @test apply_intervention(inv_int1, A, L) ≈ A .- 0.5
-    @test differentiate_intervention(int1, A, L) ≈ 1
-    @test differentiate_intervention(inv_int1, A, L) ≈ 1
     
-    @test apply_intervention(int2, A, L) ≈ A .* 1.5
-    @test apply_intervention(inv_int2, A, L) ≈ A ./ 1.5
-    @test differentiate_intervention(int2, A, L) ≈ 1.5
-    @test differentiate_intervention(inverse(int2), A, L) ≈ 1/1.5
+    L = CausalTables.confounders(data_net)
+    A = Tables.getcolumn(CausalTables.treatment(data_net), data_net.treatment[1])
 
-    @test apply_intervention(int3, A, L) ≈ A .* 1.5 .+ 0.5
-    @test apply_intervention(inv_int3, A, L) ≈ (A .- 0.5) ./ 1.5
-    @test differentiate_intervention(int3, A, L) ≈ 1.5
-    @test differentiate_intervention(inv_int3, A, L) ≈ 1/1.5
+    @test apply_intervention(int1, L, A) ≈ A .+ 0.5
+    @test apply_intervention(inv_int1, L, A) ≈ A .- 0.5
+    @test differentiate_intervention(int1, L, A) ≈ 1
+    @test differentiate_intervention(inv_int1, L, A) ≈ 1
+    
+    @test apply_intervention(int2, L, A) ≈ A .* 1.5
+    @test apply_intervention(inv_int2, L, A) ≈ A ./ 1.5
+    @test differentiate_intervention(int2, L, A) ≈ 1.5
+    @test differentiate_intervention(inverse(int2), L, A) ≈ 1/1.5
 
-    inducedint = get_induced_intervention(int3, Sum(:A, include_self = false))
+    @test apply_intervention(int3, L, A) ≈ A .* 1.5 .+ 0.5
+    @test apply_intervention(inv_int3, L, A) ≈ (A .- 0.5) ./ 1.5
+    @test differentiate_intervention(int3, L, A) ≈ 1.5
+    @test differentiate_intervention(inv_int3, L, A) ≈ 1/1.5
+
+    inducedint = get_induced_intervention(int3, Sum(:A, :ER))
     inv_inducedint = inverse(inducedint)
     
-    A .* m .+ adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* a)
-    apply_intervention(inducedint, A, L)
-
-    @test apply_intervention(inducedint, A, L) ≈ A .* m .+ adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* a)
-    @test apply_intervention(inv_inducedint, A, L) ≈ (A .- adjacency_matrix(data_net.graph) * (ones(nv(data_net.graph)) .* a)) ./ m
-    @test all(differentiate_intervention(inducedint, A, L) .≈ 1.5)
-    @test all(differentiate_intervention(inv_inducedint, A, L) .≈ 1/1.5)
+    @test apply_intervention(inducedint, L, A) ≈ A .* m .+ data_net.arrays.ER * (ones(size(data_net.arrays.ER, 1)) .* a)
+    @test apply_intervention(inv_inducedint, L, A) ≈ (A .- data_net.arrays.ER * (ones(size(data_net.arrays.ER, 1)) .* a)) ./ m
+    @test all(differentiate_intervention(inducedint, L, A) .≈ 1.5)
+    @test all(differentiate_intervention(inv_inducedint, L, A) .≈ 1/1.5)
 end
 
 @testset "InterventionModel" begin

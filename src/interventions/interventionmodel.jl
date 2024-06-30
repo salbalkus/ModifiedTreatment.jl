@@ -25,7 +25,6 @@ MMI.inverse_transform(m::InterventionModel, fitresult, intervention::Interventio
 function get_summarized_data(O)
     # Apply summary function to the data and select only the variables that are not the response
     Os = CausalTables.summarize(O)
-    #LAs = CausalTables.replacetable(Os, TableOperations.select(Os, setdiff(Tables.columnnames(Os), (getresponsesymbol(Os),))...) |> Tables.columntable)
 
     # Collect names of the variables being summarized and the treatment
     summaries = getsummaries(Os)

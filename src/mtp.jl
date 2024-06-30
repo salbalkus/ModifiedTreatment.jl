@@ -17,12 +17,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     δ = source(Δ)
     Os = source(O)
     Y = getresponse(Os)
-    G = get_dependency_neighborhood(getgraph(Os))
-
-    #stand = Standardizer();
-    #Os_table = CausalTables.gettable(Os)
-    #Os_table_white = transform(fit!(machine(stand, Os_table)), Os_table)
-    #Os_white = CausalTables.replacetable(Os, Os_table_white)
+    #G = get_dependency_neighborhood(getgraph(Os))
 
     model_intervention = InterventionModel()
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
