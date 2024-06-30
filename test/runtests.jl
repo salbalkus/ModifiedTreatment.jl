@@ -93,7 +93,7 @@ data_net = rand(scm_net, 100)
     @test all(differentiate_intervention(inv_inducedint, L, A) .≈ 1/1.5)
 end
 
-@testset "InterventionModel" begin
+#@testset "InterventionModel" begin
     intervention = LinearShift(1.5, 0.5)
     intmach = machine(InterventionModel(), data_net) |> fit!
     LAs, Ls, As = predict(intmach, intervention)

@@ -192,7 +192,7 @@ version = "0.1.15"
 
 [[deps.CausalTables]]
 deps = ["DataAPI", "Distributions", "MacroTools", "PrettyTables", "StatsBase", "TableTransforms", "Tables"]
-git-tree-sha1 = "e37e5cc2c4f2c81ffbe75d2cb8c750b948b9d90a"
+git-tree-sha1 = "7e66d23660d22f8b4bfb5b033f616252bc070637"
 repo-rev = "main"
 repo-url = "https://github.com/salbalkus/CausalTables.jl.git"
 uuid = "6af48e0c-efc2-4bf7-a92f-a553ccf79fd6"

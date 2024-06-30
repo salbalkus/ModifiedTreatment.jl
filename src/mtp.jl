@@ -16,8 +16,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
 
     δ = source(Δ)
     Os = source(O)
-    Y = getresponse(Os)
-    #G = get_dependency_neighborhood(getgraph(Os))
+    Y = _get_response_vector(Os)
 
     model_intervention = InterventionModel()
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
@@ -73,6 +72,12 @@ estimate(machine::Machine, δnew::Intervention) = MTPResult(
 
 # Define custom function to extract the nuisance estimators from the learning network machine
 nuisance_machines(machine::Machine{MTP}) = MLJBase.unwrap(machine.fitresult).nuisance_machines
+
+function _get_response_vector(Os::CausalTable)
+    Y_table = CausalTables.getresponse(Os)
+    Y = DataAPI.ncol(Y_table) == 1 ? Tables.getcolumn(Y_table, 1) : throw(ArgumentError("Provided table with columns $(Tables.columnnames(Y_table)) has more than one column, when only a single column is supported."))
+    return Y
+end
 
 function get_dependency_neighborhood(g::AbstractGraphOrNothing)
     # Only compute if a graph is passed in

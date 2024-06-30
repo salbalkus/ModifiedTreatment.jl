@@ -18,7 +18,4 @@ end
 
 cov_unscaled(x::Vector, G::AbstractMatrix) = (transpose(x) * G * x)
 
-table_to_vector(X) = DataAPI.ncol(X) == 1 ? Tables.getcolumn(X, 1) : throw(ArgumentError("Provided table has more than one column. This function is only used to convert a single column table to a vector."))
-
-
 
