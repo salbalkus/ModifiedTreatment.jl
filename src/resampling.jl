@@ -9,7 +9,7 @@ mutable struct BasicSampler <: BootstrapSampler end
 function bootstrap(::BasicSampler, O::CausalTable)
 
     # Sample randomly with replacement
-    tbl = Tables.subset(gettable(O), rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
+    tbl = Tables.subset(O, rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
 
     # Return the resampled table
     return CausalTables.replacetable(O, tbl)
@@ -69,7 +69,7 @@ bootstrap(::VertexSampler, O::CausalTable) = vertex_index(O, rand(1:DataAPI.nrow
 function vertex_index(O::CausalTable, samp::Vector{Int})
     # First, filter the table
     g = getgraph(O)
-    tbl_new = Tables.subset(gettable(O), samp)
+    tbl_new = Tables.subset(O, samp)
 
     # Compute the graph density for adding random edges
     g_density = (ne(g) / nv(g)^2 )

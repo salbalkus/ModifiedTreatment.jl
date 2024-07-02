@@ -19,4 +19,3 @@ end
 cov_unscaled(x::Vector, G::AbstractMatrix) = (transpose(x) * G * x)
 
 
-

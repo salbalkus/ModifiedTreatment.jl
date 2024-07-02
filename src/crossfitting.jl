@@ -42,12 +42,12 @@ function MMI.fit(dp::DecomposedPropensityRatio, verbosity, X, Y)
 
         # Construct a table of the target
         target = cur_treatment_names[k]
-        Yk = TableOperations.select(Y, target) |> Tables.columntable
+        Yk = Y |> TableTransforms.Select(target)
 
         # Construct a covariate table that includes future targets as covariates
         # This iteratively removes the target from the table of all variables
         all_col_names = filter(x -> x != target, all_col_names)
-        XY = TableOperations.select(XY, all_col_names...) |> Tables.columntable
+        XY = XY |> TableTransforms.Select(all_col_names...)
 
         # Fit the propensity score ratio model of the current target, controlling for subsequent targets
         machines[k] = fit!(machine(dp.model, XY, Yk))
@@ -63,8 +63,8 @@ function MMI.predict(::DecomposedPropensityRatio, fitresult, Xy_nu, Xy_de)
     # return the product of the ratios, based on the decomposition provided in Forastiere et al. (2021)
     output = ones(DataAPI.nrow(Xy_nu))
     for i in 1:length(fitresult.machines)
-        Xy_nu_i = replacetable(Xy_nu, TableOperations.select(Xy_nu, fitresult.inclusions[i]...) |> Tables.columntable)
-        Xy_de_i = replacetable(Xy_de, TableOperations.select(Xy_de, fitresult.inclusions[i]...) |> Tables.columntable)
+        Xy_nu_i = CausalTables.replace(Xy_nu; data = Xy_nu |> TableTransforms.Select(fitresult.inclusions[i]...))
+        Xy_de_i = CausalTables.replace(Xy_de; data = Xy_de |> TableTransforms.Select(fitresult.inclusions[i]...))
         pred = MMI.predict(fitresult.machines[i], Xy_nu_i, Xy_de_i)
         output = output .* pred
     end

@@ -56,7 +56,7 @@ function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
     estimating_function = (Hn .* Y) .- ψ
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
-    if isnothing(G) || size(G, 1) == 0
+    if isnothing(G) || G == LinearAlgebra.I(length(Y))
         return IPWResult(ψ, σ2, false)
     else
         σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
@@ -70,7 +70,7 @@ function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
     estimating_function = Hn .* (Y .- ψ) ./ weight_mean
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
-    if isnothing(G) || size(G, 1) == 0
+    if isnothing(G) || G == LinearAlgebra.I(length(Y))
         return IPWResult(ψ, σ2, true)
     else
         σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
@@ -83,7 +83,7 @@ function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
     ψ = mean(D)
     D = D .- ψ
     σ2 = mean(D.^2) / length(D)
-    if isnothing(G) || size(G, 1) == 0
+    if isnothing(G) || G == LinearAlgebra.I(length(Y))
         return OneStepResult(ψ, σ2)
     else
         σ2net = cov_unscaled(D, G) / (length(D)^2)
@@ -116,7 +116,7 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     # Estimate variance
     D = eif(Hn, Y, Qn, Qδn) .- ψ
     σ2 = mean(D.^2) / length(D)
-    if isnothing(G) || size(G, 1) == 0
+    if isnothing(G) || G == LinearAlgebra.I(length(Y))
         return TMLEResult(ψ, σ2)
     else
         σ2net = cov_unscaled(D, G) / (length(D)^2)

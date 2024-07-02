@@ -1,10 +1,12 @@
 
 # Overload CausalTable functions for nodes
-CausalTables.gettreatment(O::AbstractNode) = node(CausalTables.gettreatment, O)
-CausalTables.getresponse(O::AbstractNode) = node(CausalTables.getresponse, O)
-CausalTables.getgraph(O::AbstractNode) = node(CausalTables.getgraph, O)
-CausalTables.getsummaries(O::AbstractNode) = node(CausalTables.getsummaries, O)
+CausalTables.treatment(O::AbstractNode) = node(CausalTables.treatment, O)
+CausalTables.response(O::AbstractNode) = node(CausalTables.response, O)
+CausalTables.confounders(O::AbstractNode) = node(CausalTables.confounders, O)
 CausalTables.summarize(O::AbstractNode) = node(CausalTables.summarize, O)
+CausalTables.replace(O::AbstractNode; data::AbstractNode = nothing) = node((x, data) -> CausalTables.replacetable(x; data = data), O, data)
+CausalTables.data(O::AbstractNode) = node(CausalTables.data, O)
+CausalTables.dependency_matrix(O::AbstractNode) = node(CausalTables.dependency_matrix, O)
 
 # Overload the merge function for nodes
 Base.merge(nt1::AbstractNode, nt2::AbstractNode) = node((nt1, nt2) -> merge(nt1, nt2), nt1, nt2)
@@ -14,5 +16,8 @@ Base.getindex(nt::AbstractNode, i::Int64) = node(nt -> getindex(nt, i), nt)
 Base.iterate(nt::AbstractNode) = node(nt -> iterate(nt), nt)
 Base.prod(nt::AbstractNode) = node(nt -> prod(nt), nt)
 #Base.length(nt::AbstractNode) = node(nt -> length(nt), nt)
+
+
+
 
 
