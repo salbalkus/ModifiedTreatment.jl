@@ -110,6 +110,27 @@ end
     @test dAδsinv.A == 1/1.5
 end
 
+@testset "Truth" begin
+    scm_test = StructuralCausalModel(
+        @dgp(
+            L ~ Bernoulli(0.0),
+            A ~ (@. Normal(L, 0.01)),
+            ER = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(A), 2)),
+            As $ Sum(:A, :ER),
+            Y ~ (@. Normal(L + A + As, 0.01))
+        ),
+        treatment = :A,
+        response = :Y,
+        confounders = [:L]
+    )
+    data_test = rand(scm_test, 10000)
+    intervention = AdditiveShift(1.0)
+    
+    ψ = compute_true_MTP(scm_test, data_test, intervention).ψ
+
+    @test within(ψ, 3, 0.01)
+end
+
 @testset "DecomposedPropensityRatio on Network" begin
     
     LA = CausalTables.replace(data_net; data = data_net |> TableTransforms.Select(:L1, :L1_s, :A, :A_s))    
@@ -248,7 +269,7 @@ end
     #@test all(values(σ2boot(output)) .< moe)
 end 
 
-@testset "MTP Network" begin
+#@testset "MTP Network" begin
     Random.seed!(1)
     moe = 1.0
 
@@ -267,18 +288,6 @@ end
         Y ~ (@. Normal(A + 0.5 * As + reg + 100, 1))
     );
 
-    distseqnet = @dgp(
-        L1 ~ Normal(0, 2),
-        ER = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 3/length(L1))),
-        L2 ~ Normal(1, 1),
-        L3 ~ Bernoulli(0.3),
-        L4 ~ Bernoulli(0.6),
-        A ~ (@. Normal(0.5 * (L1 + L2 + L3) + 0.1 * L4 + 1, 1)),
-        As $ Sum(:A, :ER),
-        Y ~ (@. Normal(A + As + 0.1 * L1 + 0.2 * L2 + 0.1 * L3 + 0.2 * L4 + 100, 1))
-    );
-
-
     scm_net =  CausalTables.StructuralCausalModel(
         distseqnet;
         treatment = :A,
@@ -294,15 +303,18 @@ end
     
     truth = compute_true_MTP(scm_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
-    #density_ratio_estimator = DensityRatioKLIEP([10.0], [10])
-    density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(scm_net))
+    density_ratio_estimator = DensityRatioKLIEP([10.0], [10])
+    #density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(scm_net))
     cv_splitter = nothing#CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
     
-    output = ModifiedTreatment.estimate(mtpmach, intervention)
+    output = ModifiedTreatment.estimate(mtpmach, AdditiveShift(0.2))
     ψ_est = ψ(output)
+
+    report(mtpmach).Hn
+
     @test within(ψ_est.plugin, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
     @test within(ψ_est.sipw, truth.ψ, moe)
