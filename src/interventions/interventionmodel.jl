@@ -36,7 +36,6 @@ function get_summarized_data(O)
         treatment_name = treatment_name_vec[1]
         summary_name = isempty(summary_name_vec) ? nothing : summary_name_vec[1]
     end
-
     LAs = CausalTables.responseparents(Os)
     L = CausalTables.confounders(LAs)
     A = CausalTables.treatment(LAs)
@@ -69,7 +68,9 @@ function get_intervened_data(LAs, L, intervention::Intervention, treatment_name,
         Aδinterventions = merge(Aδinterventions, NamedTuple{ts}((Aδs,)))
     end
 
-    LAδinterventions = CausalTables.replace(LAs; data = merge(L.data, Aδinterventions))
+    original_name_order = Tables.columnnames(LAs)
+    LAδinterventions = CausalTables.replace(LAs; data = merge(L.data, Aδinterventions) |> TableTransforms.Select(original_name_order)) 
+
     return LAδinterventions, Aderivatives
 end
 
