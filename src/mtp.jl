@@ -5,18 +5,15 @@ mutable struct MTP <: UnsupervisedNetworkComposite
     confidence::Float64
 end
 
-CausalTables.gettable(x::AbstractNode) = node(x -> CausalTables.gettable(x), x)
-CausalTables.replacetable(x::AbstractNode, table::AbstractNode) = node((x, table) -> CausalTables.replacetable(x, table), x, table)
+
 MTP(mean_estimator, density_ratio_estimator, cv_splitter) = MTP(mean_estimator, density_ratio_estimator, cv_splitter, 0.95)
 
 function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
 
-    # Throw errors if inputs are invalid
-    check_inputs(mtp, O, Δ)
-
     δ = source(Δ)
     Os = source(O)
     Y = _get_response_vector(Os)
+    G = CausalTables.dependency_matrix(Os)
 
     model_intervention = InterventionModel()
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
@@ -74,10 +71,11 @@ estimate(machine::Machine, δnew::Intervention) = MTPResult(
 nuisance_machines(machine::Machine{MTP}) = MLJBase.unwrap(machine.fitresult).nuisance_machines
 
 function _get_response_vector(Os::CausalTable)
-    Y_table = CausalTables.getresponse(Os)
+    Y_table = CausalTables.response(Os)
     Y = DataAPI.ncol(Y_table) == 1 ? Tables.getcolumn(Y_table, 1) : throw(ArgumentError("Provided table with columns $(Tables.columnnames(Y_table)) has more than one column, when only a single column is supported."))
     return Y
 end
+_get_response_vector(Os::AbstractNode) = node(_get_response_vector, Os)
 
 function get_dependency_neighborhood(g::AbstractGraphOrNothing)
     # Only compute if a graph is passed in
@@ -99,15 +97,6 @@ function get_dependency_neighborhood(g::AbstractGraphOrNothing)
     return Anew
 end
 get_dependency_neighborhood(g::Node) = node(g -> get_dependency_neighborhood(g), g)
-
-function check_inputs(mtp, O::CausalTable, Δ::Intervention)
-
-    # Ensure graph has a node for each data unit
-    g = getgraph(O)
-    if (!isnothing(g)) && (nv(g) != DataAPI.nrow(O)) && (nv(g) > 0)
-        throw(ArgumentError("Graph must have the same number of vertices as the number of rows in the data, or be empty (have 0 vertices)."))
-    end
-end
 
 function intervene_on_data(model_intervention, Os, δ)
     mach_intervention = machine(model_intervention, Os)

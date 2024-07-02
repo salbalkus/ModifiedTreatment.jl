@@ -9,7 +9,7 @@ module ModifiedTreatment
     using StatsBase
     using Graphs
     using Tables
-    using TableOperations
+    using TableTransforms
     using DataAPI
     using CausalTables
     using Condensity
@@ -28,7 +28,7 @@ module ModifiedTreatment
     AbstractGraphOrNothing = Union{AbstractGraph, Nothing}
 
     include("nodeutils.jl")
-    export gettreatment, getresponse, getgraph, getsummaries, summarize
+    export treatment, response, confounders, summarize
     export merge, getindex, iterate, length
 
     include("utils.jl")
@@ -65,6 +65,5 @@ module ModifiedTreatment
 
     # general
     export prefit, fit, transform, inverse_transform, predict
-    export replace_treatment
 
 end
