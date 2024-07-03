@@ -20,7 +20,6 @@ IPWResult(ψ, σ2, stabilized) = IPWResult(ψ, σ2, nothing, nothing, stabilized
 IPWResult(ψ, σ2, σ2net, stabilized) = IPWResult(ψ, σ2, σ2net, nothing, stabilized)
 
 
-
 mutable struct OneStepResult <: CausalEstimatorResult
     ψ::Estimate
     σ2::Estimate

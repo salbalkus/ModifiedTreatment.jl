@@ -36,6 +36,6 @@ function compute_true_MTP(dgp, data, intervention)
     G = CausalTables.dependency_matrix(data)
     eff_bound = cov_unscaled(D, G) / length(D)
 
-    true_result = (ψ = ψ, eff_bound = eff_bound)
+    true_result = (ψ = ψ - mean(Y), eff_bound = eff_bound)
     return true_result
 end
