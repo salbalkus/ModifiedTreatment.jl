@@ -98,6 +98,7 @@ end
     @test LAs.data == (L1 = data_net.data.L1, A = data_net.data.A, L1_s = data_net.data.L1_s, A_s = data_net.data.A_s)
     
     LAδs, dAδs = transform(intmach, intervention)
+    LAδs
     @test LAδs.data.A ≈ (data_net.data.A .* 1.5) .+ 0.5
     @test LAδs.data.A_s ≈ data_net.arrays.ER * ((data_net.data.A .* 1.5) .+ 0.5)
     @test dAδs.A_s == 1.5
@@ -268,7 +269,7 @@ end
     #@test all(values(σ2boot(output)) .< moe)
 end 
 
-#@testset "MTP Network" begin
+@testset "MTP Network" begin
     Random.seed!(1)
     moe = 1.0
 
