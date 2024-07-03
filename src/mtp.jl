@@ -164,7 +164,7 @@ function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
     mach_onestep = machine(OneStep(), Y, Qn, G) |> fit!
     mach_tmle = machine(TMLE(), Y, Qn, G) |> fit!
 
-    plugin_est = plugin_transform(Qδn)
+    plugin_est = plugin_transform(Y, Qδn)
     ipw_est = node(Hn -> MMI.transform(mach_ipw, Hn, false), Hn)
     sipw_est =  node(Hn -> MMI.transform(mach_ipw, Hn, true), Hn)
     onestep_est = MMI.transform(mach_onestep, Qδn, Hn)

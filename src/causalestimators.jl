@@ -45,8 +45,8 @@ TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
 eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
 
-plugin_transform(Qδn::Vector) = PlugInResult(mean(Qδn) - mean(Y))
-plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
+plugin_transform(Y::Array, Qδn::Array) = PlugInResult(mean(Qδn) - mean(Y))
+plugin_transform(Y::Node, Qδn::Node) = node((Y, Qδn) -> plugin_transform(Y, Qδn), Y, Qδn)
 
 # define basic estimators
 function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
