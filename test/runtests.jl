@@ -127,9 +127,9 @@ end
     data_test = rand(scm_test, 10000)
     intervention = AdditiveShift(1.0)
     
-    ψ = compute_true_MTP(scm_test, data_test, intervention).ψ
+    ψtrue = compute_true_MTP(scm_test, data_test, intervention).ψ
 
-    @test within(ψ, 3, 0.01)
+    @test within(ψtrue, 3, 0.01)
 end
 
 @testset "DecomposedPropensityRatio on Network" begin
@@ -256,7 +256,6 @@ end
     @test maximum(abs.(report(mtpmach_oracle).Hn .- report(mtpmach).Hn)) < moe
     σ2net(output)
     σ2_est = values(σ2(output))
-    using LinearAlgebra
     
     @test isnothing(σ2_est[1])
     #@test all(σ2_est[2:end] .< moe)
