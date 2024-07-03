@@ -45,8 +45,7 @@ TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
 eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
 
-plugin_transform(Y::Array, Qδn::Array) = PlugInResult(mean(Qδn) - mean(Y))
-plugin_transform(Y::Node, Qδn::Node) = node((Y, Qδn) -> plugin_transform(Y, Qδn), Y, Qδn)
+plugin(Y::Array, Qδn::Array) = PlugInResult(mean(Qδn) - mean(Y))
 
 # define basic estimators
 function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
@@ -126,6 +125,10 @@ end
 # Define MLJ-type estimaator machines for the learning network
 
 abstract type CausalEstimator <: MMI.Unsupervised end
+
+mutable struct PlugIn <: CausalEstimator end
+MMI.fit(::PlugIn, verbosity, Y) = (fitresult = (; Y = Y), cache = nothing, report = nothing)
+MMI.transform(::PlugIn, fitresult, Qδn) = plugin(fitresult.Y, Qδn)
 
 mutable struct IPW <: CausalEstimator end
 MMI.fit(::IPW, verbosity, Y, G) = (fitresult = (; Y = Y, G = G), cache = nothing, report = nothing)

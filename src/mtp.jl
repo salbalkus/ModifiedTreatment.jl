@@ -160,11 +160,12 @@ function estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs
 end
 
 function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
+    mach_plugin = machine(PlugIn(), Y) |> fit!
     mach_ipw = machine(IPW(), Y, G) |> fit!
     mach_onestep = machine(OneStep(), Y, Qn, G) |> fit!
     mach_tmle = machine(TMLE(), Y, Qn, G) |> fit!
 
-    plugin_est = plugin_transform(Y, Qδn)
+    plugin_est = MMI.transform(mach_plugin, Qδn)
     ipw_est = node(Hn -> MMI.transform(mach_ipw, Hn, false), Hn)
     sipw_est =  node(Hn -> MMI.transform(mach_ipw, Hn, true), Hn)
     onestep_est = MMI.transform(mach_onestep, Qδn, Hn)
