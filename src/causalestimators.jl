@@ -46,7 +46,7 @@ TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
 eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
 
-plugin_transform(Qδn::Vector) = PlugInResult(mean(Qδn) - mean(Y))
+plugin_transform(Qδn::Vector) = PlugInResult(mean(Qδn))
 plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 
 # define basic estimators
@@ -57,10 +57,10 @@ function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || G == LinearAlgebra.I(length(Y))
-        return IPWResult(ψ - mean(Y), σ2, false)
+        return IPWResult(ψ, σ2, false)
     else
         σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
-        return IPWResult(ψ - mean(Y), σ2, σ2net, false)
+        return IPWResult(ψ, σ2, σ2net, false)
     end
 end
 
@@ -71,10 +71,10 @@ function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
 
     if isnothing(G) || G == LinearAlgebra.I(length(Y))
-        return IPWResult(ψ - mean(Y), σ2, true)
+        return IPWResult(ψ, σ2, true)
     else
         σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
-        return IPWResult(ψ - mean(Y), σ2, σ2net, true)
+        return IPWResult(ψ, σ2, σ2net, true)
     end
 end
 
@@ -84,10 +84,10 @@ function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
     D = D .- ψ
     σ2 = mean(D.^2) / length(D)
     if isnothing(G) || G == LinearAlgebra.I(length(Y))
-        return OneStepResult(ψ - mean(Y), σ2)
+        return OneStepResult(ψ, σ2)
     else
         σ2net = cov_unscaled(D, G) / (length(D)^2)
-        return OneStepResult(ψ - mean(Y), σ2, σ2net)
+        return OneStepResult(ψ, σ2, σ2net)
     end
 end
 
@@ -117,10 +117,10 @@ function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Arr
     D = eif(Hn, Y, Qn, Qδn) .- ψ
     σ2 = mean(D.^2) / length(D)
     if isnothing(G) || G == LinearAlgebra.I(length(Y))
-        return TMLEResult(ψ - mean(Y), σ2)
+        return TMLEResult(ψ, σ2)
     else
         σ2net = cov_unscaled(D, G) / (length(D)^2)
-        return TMLEResult(ψ - mean(Y), σ2, σ2net)
+        return TMLEResult(ψ, σ2, σ2net)
     end
 end
 
