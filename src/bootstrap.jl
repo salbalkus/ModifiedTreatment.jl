@@ -67,7 +67,7 @@ function bootstrap_sample(mtpresult::MTPResult, sampler::BootstrapSampler, mach_
     # Extract the variables needed to bootstrap
     O_sample = bootstrap(sampler, O)
     Y = getresponse(O_sample)
-    G = get_dependency_neighborhood(getgraph(O_sample))
+    G = CausalTables.dependency_matrix(O_sample)
 
     # Apply intervention and summarize the bootstrapped sample
     LAs, LAδ, dAδ, LAδinv, dAδinv = get_summarized_intervened_data(O_sample, mtpresult, types)

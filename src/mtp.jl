@@ -77,27 +77,6 @@ function _get_response_vector(Os::CausalTable)
 end
 _get_response_vector(Os::AbstractNode) = node(_get_response_vector, Os)
 
-function get_dependency_neighborhood(g::AbstractGraphOrNothing)
-    # Only compute if a graph is passed in
-    if isnothing(g)
-        return nothing
-    end
-    
-    A = adjacency_matrix(g)
-
-    # get the nodes within two-hops of the adjacency matrix,
-    # add them to the original,
-    # and return edge weights to 1
-    Anew = ((A .+ (A * A)) .> 0)
-    Anew[diagind(Anew)] .= 1
-
-    # directly return the adjacency matrix
-    # WARNING: If a graph is constructed from this output, the 1-diagonal will be converted to a 0-diagonal
-    # and subsequently matrix multiplications may be incorrect if a 1-diagonal was assumed
-    return Anew
-end
-get_dependency_neighborhood(g::Node) = node(g -> get_dependency_neighborhood(g), g)
-
 function intervene_on_data(model_intervention, Os, δ)
     mach_intervention = machine(model_intervention, Os)
 
