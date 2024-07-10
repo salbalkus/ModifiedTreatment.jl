@@ -128,12 +128,19 @@ function estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs
     # Get Conditional Mean
     Qn = MMI.predict(mach_mean, LAs)
     Qδn = MMI.predict(mach_mean, LAδs)
+    
 
     # Get Density Ratio
     Hn = MMI.predict(mach_density, LAδsinv, LAs) * prod(dAδsinv)
 
     # TODO: Check if we actually don't need to multiply by a derivative here
     Hshiftn = MMI.predict(mach_density, LAs, LAδs)
+
+    # Fix potential type issues for GLM package
+    Qn = node(Qn -> Float64.(Qn), Qn)
+    Qδn = node(Qδn -> Float64.(Qδn), Qδn)
+    Hn = node(Hn -> Float64.(Hn), Hn)
+    Hshiftn = node(Hshiftn -> Float64.(Hshiftn), Hshiftn)
 
     return Qn, Qδn, Hn, Hshiftn
 end
