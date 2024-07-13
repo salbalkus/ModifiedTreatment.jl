@@ -1,6 +1,6 @@
 
 
-function compute_true_MTP(dgp, data, intervention; difference = false)
+function compute_true_MTP(dgp, data, intervention)
 
     # summarize, if not already
     data = summarize(data)
@@ -33,11 +33,6 @@ function compute_true_MTP(dgp, data, intervention; difference = false)
 
     G = CausalTables.dependency_matrix(data)
     eff_bound = cov_unscaled(D, G) / length(D)
-
-    if difference
-        true_result = (ψ = ψ - mean(Y), eff_bound = eff_bound)
-    else
-        true_result = (ψ = ψ, eff_bound = eff_bound)
-    end
+    true_result = (ψ = ψ, ψ_dif = ψ - mean(Y), eff_bound = eff_bound)
     return true_result
 end
