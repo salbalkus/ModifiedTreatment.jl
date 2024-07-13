@@ -1,8 +1,6 @@
 
-# TODO: This function only works if the data are IID.
-# Need to implement efficiency bound for non-IID data.
 
-function compute_true_MTP(dgp, data, intervention)
+function compute_true_MTP(dgp, data, intervention; difference = false)
 
     # summarize, if not already
     data = summarize(data)
@@ -36,6 +34,10 @@ function compute_true_MTP(dgp, data, intervention)
     G = CausalTables.dependency_matrix(data)
     eff_bound = cov_unscaled(D, G) / length(D)
 
-    true_result = (ψ = ψ, eff_bound = eff_bound)
+    if difference
+        true_result = (ψ = ψ - mean(Y), eff_bound = eff_bound)
+    else
+        true_result = (ψ = ψ, eff_bound = eff_bound)
+    end
     return true_result
 end
