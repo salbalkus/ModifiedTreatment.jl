@@ -37,7 +37,7 @@ function get_summarized_data(O)
         summary_name = isempty(summary_name_vec) ? nothing : summary_name_vec[1]
     end
     LAs = CausalTables.responseparents(Os)
-    L = CausalTables.confounders(LAs)
+    L = CausalTables.confounders(Os; include_summary = false)
     A = CausalTables.treatment(LAs)
     
     return LAs, L, A, treatment_name, summary_name
