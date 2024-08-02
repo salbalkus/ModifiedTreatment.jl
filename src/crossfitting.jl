@@ -97,10 +97,10 @@ end
 
 function MMI.fit(sl::SuperLearnerDeterministic, verbosity, X, y)
 
-    measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = rmse, verbosity = verbosity).measurement, sl.models)
+    measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = rmse, verbosity = -1).measurement, sl.models)
     best_model = sl.models[argmin(measurements)]
     
-    best_mach = fit!(machine(best_model, X, y), verbosity = verbosity)
+    best_mach = fit!(machine(best_model, X, y), verbosity = 0)
     
     fitresult = (; best_mach = best_mach,)
     cache = nothing
@@ -118,10 +118,10 @@ end
 
 function MMI.fit(sl::SuperLearnerProbabilistic, verbosity, X, y)
 
-    measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = log_loss, verbosity = verbosity).measurement, sl.models)
+    measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = log_loss, verbosity = -1).measurement, sl.models)
     best_model = sl.models[argmin(measurements)]
     
-    best_mach = fit!(machine(best_model, X, y), verbosity = verbosity)
+    best_mach = fit!(machine(best_model, X, y), verbosity = 0)
     
     fitresult = (; best_mach = best_mach,)
     cache = nothing
