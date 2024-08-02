@@ -21,6 +21,24 @@ end
 MMI.predict(cfm::CrossFitModel, fitresult, X...)  = vcat([MMI.predict(fitresult.machines[i], [Tables.subset(x, fitresult.tt_pairs[i][2]) for x in X]...) for i in 1:length(fitresult.machines)]...)
 MMI.transform(cfm::CrossFitModel, fitresult, X...)  = vcat([MMI.transform(fitresult.machines[i], [Tables.subset(x, fitresult.tt_pairs[i][2]) for x in X]...) for i in 1:length(fitresult.machines)]...)
 
+
+# network cross-validation
+#struct NetworkResample <: MLJBase..ResamplingStrategy
+#    resampler::MLJBase.ResamplingStrategy
+#end
+
+#function MMI.train_test_pairs(cv::NetworkCV, rows, X::CausalTable, y)
+#    # Get pairs as if iid
+#    pairs = train_test_pairs(cv.resampler, X, y)
+#
+#    # Drop units inducing correlation between train and test sets
+#    D = CausalTables.dependency_matrix(X)
+#
+#end
+
+
+
+
 # TODO: Should we somehow specify this model must be a conditional density estimator specifically?
 struct DecomposedPropensityRatio <: MMI.Model
     model::MMI.Model
@@ -82,7 +100,7 @@ function MMI.fit(sl::SuperLearnerDeterministic, verbosity, X, y)
     measurements = map(m -> evaluate(m, X, y, resampling = sl.resampling, measure = rmse, verbosity = -1).measurement, sl.models)
     best_model = sl.models[argmin(measurements)]
     
-    best_mach = machine(best_model, X, y) |> fit!
+    best_mach = fit!(machine(best_model, X, y), verbosity = -1)
     
     fitresult = (; best_mach = best_mach,)
     cache = nothing

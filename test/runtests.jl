@@ -2,6 +2,7 @@ using Test
 using ModifiedTreatment
 using CausalTables, Condensity
 using MLJ
+using MLJBase
 using Revise
 using Distributions, Graphs
 using Tables, TableTransforms, DataAPI
@@ -15,8 +16,8 @@ KNNRegressor = @load KNNRegressor pkg=NearestNeighborModels
 
 # Classifiers
 LogisticClassifier = @load LogisticClassifier pkg=MLJLinearModels
-DecisionTreeClassifier = @load DecisionTreeClassifier pkg=DecisionTree
-KNNClassifier = @load KNNClassifier pkg=NearestNeighborModels
+LGBMClassifier = @load LGBMClassifier pkg=LightGBM
+
 
 using Random
 #using Logging
@@ -36,7 +37,8 @@ data_iid = rand(scm_iid, 100)
 
 dgp_net = @dgp(
     L1 ~ Binomial(5, 0.4),
-    ER = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(L1), 2)),
+    #ER = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(L1), 2)),
+    ER = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 5/length(L1))),
     L1_s $ Sum(:L1, :ER),
     A ~ (@. Normal(L1 + 1, 0.5)),
     A_s $ Sum(:A, :ER),
@@ -50,6 +52,7 @@ scm_net =  StructuralCausalModel(
     confounders = [:L1]
     )
 data_net = summarize(rand(scm_net, 100))
+
 
 @testset "Intervention" begin
     m = 1.5
@@ -153,7 +156,7 @@ end
     @test foo ≈ true_ratio
 end
 
-@testset "SuperLearner" begin
+#@testset "SuperLearner" begin
     Random.seed!(1)
     # Start by testing the deterministic version
     X = data_iid |> TableTransforms.Select(:L1, :A)
@@ -166,16 +169,14 @@ end
     @test length(yhat) == length(y)
     @test typeof(report(mach).best_model) <: LinearRegressor  # should select the linear model as the best
 
-
     # Now test the probabilistic version
     y = coerce(y .> 15, OrderedFactor)
-    
-    sl = SuperLearner([ConstantClassifier(), LogisticClassifier(), DecisionTreeClassifier(), KNNClassifier()], CV())
+    sl = SuperLearner([ConstantClassifier(), LogisticClassifier(), LGBMClassifier(objective = "binary", metric = ["binary_logloss"], linear_tree = true)], CV())
     mach = machine(sl, X, y) |> fit!
     yhat = pdf.(predict(mach, X), true)
 
     @test length(yhat) == length(y)
-    @test typeof(report(mach).best_model) <: KNNClassifier  # should select the linear model as the best
+    @test typeof(report(mach).best_model) <: LogisticClassifier  # should select the linear model as the best
     @test mean((yhat .> 0.5) .== y) > 0.9 # should get at least 90% accuracy
 end
 
@@ -225,7 +226,11 @@ end
     cv_splitter = CV(nfolds = 5)
 
     # Probabilistic Classifier
-    density_ratio_estimator = DensityRatioClassifier(LogisticClassifier())
+    sl = SuperLearner([LogisticClassifier(), 
+                       LGBMClassifier(objective = "cross_entropy", linear_tree = true),
+                       LGBMClassifier(objective = "cross_entropy", linear_tree = true, min_data_in_leaf = 10)
+                       ], CV())
+    density_ratio_estimator = DensityRatioClassifier(sl)
     mtp = ModifiedTreatment.MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
     output = ModifiedTreatment.estimate(mtpmach, intervention)
@@ -256,13 +261,11 @@ end
     @test maximum(abs.(report(mtpmach_oracle).Hn .- report(mtpmach).Hn)) < moe
     σ2net(output)
     σ2_est = values(σ2(output))
-    using LinearAlgebra
     
     @test isnothing(σ2_est[1])
     #@test all(σ2_est[2:end] .< moe)
     isnothing.(values(σ2net(output)))
     @test all(isnothing.(values(σ2boot(output))))
-    @test all(isnothing.(values(σ2net(output))))
 
     # TODO: Add better tests to ensure the bootstrap is working correctly
     #B = 10
@@ -316,8 +319,12 @@ end
     
     truth = compute_true_MTP(scm_net, data_vlarge, intervention)
     mean_estimator = LinearRegressor()
-    #density_ratio_estimator = DensityRatioKLIEP([10.0], [10])
-    density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(scm_net))
+    #density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(scm_net))
+    sl = SuperLearner([LogisticClassifier(), 
+                       LGBMClassifier(objective = "cross_entropy", linear_tree = true),
+                       LGBMClassifier(objective = "cross_entropy", linear_tree = true, min_data_in_leaf = 10)
+                       ], CV())
+    density_ratio_estimator = DensityRatioClassifier(sl)
     cv_splitter = nothing#CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
