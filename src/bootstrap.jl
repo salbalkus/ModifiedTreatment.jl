@@ -66,7 +66,7 @@ function bootstrap_sample(mtpresult::MTPResult, sampler::BootstrapSampler, mach_
     
     # Extract the variables needed to bootstrap
     O_sample = bootstrap(sampler, O)
-    Y = getresponse(O_sample)
+    Y = _get_response_vector(O_sample)
     G = CausalTables.dependency_matrix(O_sample)
 
     # Apply intervention and summarize the bootstrapped sample
@@ -117,15 +117,15 @@ function get_summarized_intervened_data(O::CausalTable, mtpresult::MTPResult, ty
     δ = getintervention(mtpresult)
 
     # Compute summary functions and construct the necessary data structures
-    LAs, A, L, summaries, treatmentvar, summarizedvars = get_summarized_data(O)
+    LAs, L, A, treatment_name, summary_name = get_summarized_data(O)
 
     # Based on the types of interventions, compute the necessary nuisance estimates
     LAδ, dAδ, LAδinv, dAδinv = (nothing for _ = 1:4)
     if needs_conditional_mean(types)
-        LAδ, dAδ = get_intervened_data(A, L, δ, summaries, treatmentvar, summarizedvars)
+        LAδ, dAδ = get_intervened_data(LAs, L, δ, treatment_name, summary_name)
     end
     if needs_propensity(types)
-        LAδinv, dAδinv = get_intervened_data(A, L, inverse(δ), summaries, treatmentvar, summarizedvars)
+        LAδinv, dAδinv = get_intervened_data(LAs, L, inverse(δ), treatment_name, summary_name)
     end
     return LAs, LAδ, dAδ, LAδinv, dAδinv
 end

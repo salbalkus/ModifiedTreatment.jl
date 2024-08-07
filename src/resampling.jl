@@ -12,7 +12,7 @@ function bootstrap(::BasicSampler, O::CausalTable)
     tbl = Tables.subset(O, rand(1:DataAPI.nrow(O), DataAPI.nrow(O)))
 
     # Return the resampled table
-    return CausalTables.replacetable(O, tbl)
+    return CausalTables.replace(O; data = tbl)
 end
 
 ######

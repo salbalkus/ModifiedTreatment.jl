@@ -46,11 +46,11 @@ TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
 eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
 
-plugin_transform(Qδn::Vector) = PlugInResult(mean(Qδn))
+plugin_transform(Qδn::AbstractArray) = PlugInResult(mean(Qδn))
 plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 
 # define basic estimators
-function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
+function ipw(Y::AbstractArray, Hn::AbstractArray, G::AbstractMatrix)
 
     ψ = mean(Hn .* Y)
     estimating_function = (Hn .* Y) .- ψ
@@ -59,7 +59,7 @@ function ipw(Y::Array, Hn::Array, G::AbstractMatrix)
     return IPWResult(ψ, σ2, σ2net, false)
 end
 
-function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
+function sipw(Y::AbstractArray, Hn::AbstractArray, G::AbstractMatrix)
     weight_mean = mean(Hn)
     ψ = mean((Hn .* Y) ./ weight_mean)
     estimating_function = Hn .* (Y .- ψ) ./ weight_mean
@@ -68,7 +68,7 @@ function sipw(Y::Array, Hn::Array, G::AbstractMatrix)
     return IPWResult(ψ, σ2, σ2net, true)
 end
 
-function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
+function onestep(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, G::AbstractMatrix)
     D = eif(Hn, Y, Qn, Qδn)
     ψ = mean(D)
     D = D .- ψ
@@ -77,23 +77,23 @@ function onestep(Y::Array, Qn::Array, Qδn::Array, Hn::Array, G::AbstractMatrix)
     return OneStepResult(ψ, σ2, σ2net)
 end
 
-function tmle(Y::Array, Qn::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::AbstractMatrix)
+function tmle(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, Hshiftn::AbstractArray, G::AbstractMatrix)
     scaler = StatsBase.fit(UnitRangeTransform, Y, dims = 1)
     Y01 = StatsBase.transform(scaler, Y)
     Qn01 = StatsBase.transform(scaler, Qn)
-    bound!(Qn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
+    Qn01 = bound(Qn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
     return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, G, scaler)
 end
 
-function tmle_fromscaled(Y::Array, Qn::Array, Y01::Array, Qn01::Array, Qδn::Array, Hn::Array, Hshiftn::Array, G::AbstractMatrix, scaler)
+function tmle_fromscaled(Y::AbstractArray, Qn::AbstractArray, Y01::AbstractArray, Qn01::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, Hshiftn::AbstractArray, G::AbstractMatrix, scaler)
     fit_data = MLJBase.table(hcat(Y01, Hn), names = ["Y", "Hn"])
     # Fit the logistic regression model
     # The 0 + is needed to fit the model with an intercept of 0
-    fluct_model = GLM.glm(@GLM.formula(Y ~ 0 + Hn), fit_data, Binomial(); offset = qlogis.(Qn01), verbose=false)
+    fluct_model = GLM.glm(@GLM.formula(Y ~ 0 + Hn), fit_data, Binomial(); offset = Float64.(qlogis.(Qn01)), verbose=false)
     
     # Get the predictions from the logistic regression
     Qδn01 = StatsBase.transform(scaler, Qδn)
-    bound!(Qδn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
+    Qδn01 = bound(Qδn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
     predict_data = MLJBase.table(reshape(Hshiftn, length(Hshiftn), 1), names = ["Hn"])
     Qstar01 = GLM.predict(fluct_model, predict_data, offset = qlogis.(Qδn01))
     Qstar = StatsBase.reconstruct(scaler, identity.(Qstar01)) # `identity`` strips the vector of the "Missing" type

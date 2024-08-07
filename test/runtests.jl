@@ -273,12 +273,18 @@ end
     @test all(isnothing.(values(σ2boot(output))))
 
     # TODO: Add better tests to ensure the bootstrap is working correctly
-    #B = 10
-    #ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
-    #@test all(values(σ2boot(output)) .< moe)
+    B = 1000
+    ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
+
+    output
+    σ2boot(output)
+    σ2(output)
+    
+    @test all(values(σ2boot(output)) .< moe)
+
 end 
 
-@testset "MTP Network" begin
+#@testset "MTP Network" begin
     Random.seed!(1)
     moe = 1.0
 
@@ -334,36 +340,19 @@ end
     @test isnothing(σ2_est[1])
     @test !all(within.(values(σ2_est)[4:5] .* n_large, truth.eff_bound, moe))
     
-    values(σ2_est)[4:5] .* n_large
-    truth.eff_bound
-    σ2net_est  = values(σ2net(output))
+    σ2net_est = values(σ2net(output))
     @test isnothing(σ2_est[1])
     @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe * 20))
     @test all(isnothing.(values(σ2boot(output))))
 
     # TODO: Add better tests to ensure the bootstrap is working correctly
     # Test the cluster bootstrap
-    """
     B = 100
-    clustersampler = ClusterSampler(2)
-    ModifiedTreatment.bootstrap!(clustersampler, output, B)  
-    σ2boot_est = values(σ2boot(output))
-    @test all(values(σ2boot_est) .< moe)
+    ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
+    @test !all(within.(values(σ2boot(output))[4:5] .* n_large, truth.eff_bound, moe))
+    @test all(values(σ2boot(output)) .< moe)
 
-    # Ensure bootstrap and network variance estimator yield roughly same variance
-    @test all(within.(σ2net_est[2:end], σ2boot_est[2:end], moe))
 
-    # Test graph updating scheme
-    # and that the basic bootstrap works on a graph with otherwise-IID data
-    data_small = rand(dgp_net, 10^4)
-    mtpmach2 = machine(mtp, data_small, intervention) |> fit!
-    output2 = ModifiedTreatment.estimate(mtpmach2, intervention)
-    basicsampler = BasicSampler()
-    ModifiedTreatment.bootstrap!(basicsampler, output2, B)  
-    σ2boot_est2 = values(σ2boot(output2))
-    @test all(σ2boot_est2 .< moe)
-    @test all(σ2boot_est .- σ2boot_est2 .< moe * 0.1)
-    """
 end
 
 
