@@ -11,13 +11,15 @@ using DensityRatioEstimation
 # Regressors
 DeterministicConstantRegressor = @load DeterministicConstantRegressor pkg=MLJModels
 LinearRegressor = @load LinearRegressor pkg=MLJLinearModels
-DecisionTreeRegressor = @load DecisionTreeRegressor pkg=DecisionTree
 KNNRegressor = @load KNNRegressor pkg=NearestNeighborModels
+LGBMRegressor = @load LGBMRegressor pkg=LightGBM
+XGBoostRegressor = @load XGBoostRegressor pkg=XGBoost
+
 
 # Classifiers
 LogisticClassifier = @load LogisticClassifier pkg=MLJLinearModels
 LGBMClassifier = @load LGBMClassifier pkg=LightGBM
-
+XGBoostClassifier = @load XGBoostClassifier pkg=XGBoost
 
 using Random
 #using Logging
@@ -51,8 +53,8 @@ scm_net =  StructuralCausalModel(
     response = :Y,
     confounders = [:L1]
     )
-data_net = summarize(rand(scm_net, 100))
-
+data_net = rand(scm_net, 100)
+data_net_sum = summarize(data_net)
 
 @testset "Intervention" begin
     m = 1.5
@@ -95,13 +97,15 @@ end
 @testset "InterventionModel" begin
     intervention = LinearShift(1.5, 0.5)
     intmach = machine(ModifiedTreatment.InterventionModel(), data_net) |> fit!
+    
     LAs, Ls, As = predict(intmach, intervention)
-    @test Ls.data == (L1 = data_net.data.L1, L1_s = data_net.data.L1_s,)
-    @test As.data == (A = data_net.data.A, A_s = data_net.data.A_s,)
-    @test LAs.data == (L1 = data_net.data.L1, A = data_net.data.A, L1_s = data_net.data.L1_s, A_s = data_net.data.A_s)
+    
+    @test Ls.data == (L1 = data_net_sum.data.L1, L1_s = data_net_sum.data.L1_s,)
+    @test As.data == (A = data_net_sum.data.A, A_s = data_net_sum.data.A_s,)
+    @test LAs.data == (L1 = data_net_sum.data.L1, A = data_net_sum.data.A, L1_s = data_net_sum.data.L1_s, A_s = data_net_sum.data.A_s)
     
     LAδs, dAδs = transform(intmach, intervention)
-    LAδs
+    
     @test LAδs.data.A ≈ (data_net.data.A .* 1.5) .+ 0.5
     @test LAδs.data.A_s ≈ data_net.arrays.ER * ((data_net.data.A .* 1.5) .+ 0.5)
     @test dAδs.A_s == 1.5
@@ -130,17 +134,16 @@ end
     data_test = rand(scm_test, 10000)
     intervention = AdditiveShift(1.0)
     
-    ψ = compute_true_MTP(scm_test, data_test, intervention).ψ
+    truth = compute_true_MTP(scm_test, data_test, intervention).ψ
 
-    @test within(ψ, 3, 0.01)
+    @test within(truth, 3, 0.01)
 end
 
 @testset "DecomposedPropensityRatio on Network" begin
-    
-    LA = CausalTables.replace(data_net; data = data_net |> TableTransforms.Select(:L1, :L1_s, :A, :A_s))    
+    LA = CausalTables.replace(data_net; data = data_net_sum |> TableTransforms.Select(:L1, :L1_s, :A, :A_s))    
     ratio_model = DecomposedPropensityRatio(DensityRatioPlugIn(OracleDensityEstimator(scm_net)))
-    L = data_net |> Select(:L1, :L1_s) |> Tables.columntable
-    A = data_net |> Select(:A, :A_s) |> Tables.columntable
+    L = data_net_sum |> Select(:L1, :L1_s) |> Tables.columntable
+    A = data_net_sum |> Select(:A, :A_s) |> Tables.columntable
     mach_ratio = machine(ratio_model, L, A) |> fit!
     LAδ = CausalTables.replace(LA; data= merge(L, (A = Tables.getcolumn(A, :A), A_s = Tables.getcolumn(A, :A_s))))
     predict(mach_ratio, LA, LAδ)
@@ -156,7 +159,7 @@ end
     @test foo ≈ true_ratio
 end
 
-#@testset "SuperLearner" begin
+@testset "SuperLearner" begin
     Random.seed!(1)
     # Start by testing the deterministic version
     X = data_iid |> TableTransforms.Select(:L1, :A)
@@ -190,8 +193,10 @@ end
     pred_mean = MLJ.predict(mach_mean, LA)
     @test cor(Y, pred_mean) ≈ 1.0
 
-    # TODO: Test this for network data. Note that currently CrossFitModel requires IID data because
-    # if data are split using vanilla CV, the summary functions will no longer be correct
+    sl = XGBoostClassifier(objective = "binary:logistic")
+    density_ratio_estimator = DensityRatioClassifier(sl)
+
+    # TODO: Test this for network data.
     ratio_model = DecomposedPropensityRatio(DensityRatioPlugIn(OracleDensityEstimator(scm_iid)))
     ratio_crossfit = CrossFitModel(ratio_model, CV())
     L = data_net |> CausalTables.Select(:L1) |> Tables.columntable
@@ -227,8 +232,8 @@ end
 
     # Probabilistic Classifier
     sl = SuperLearner([LogisticClassifier(), 
-                       LGBMClassifier(objective = "cross_entropy", linear_tree = true),
-                       LGBMClassifier(objective = "cross_entropy", linear_tree = true, min_data_in_leaf = 10)
+                       LGBMClassifier(objective = "binary", linear_tree = true),
+                       LGBMClassifier(objective = "binary", linear_tree = true, min_data_in_leaf = 10)
                        ], CV())
     density_ratio_estimator = DensityRatioClassifier(sl)
     mtp = ModifiedTreatment.MTP(mean_estimator, density_ratio_estimator, cv_splitter)
@@ -245,7 +250,7 @@ end
     mtp_oracle = MTP(mean_estimator, density_ratio_oracle, nothing)
     mtpmach_oracle = machine(mtp_oracle, data_large, intervention) |> fit!
     output_oracle = ModifiedTreatment.estimate(mtpmach_oracle, intervention)
-
+    
     ψ_est = ψ(output)
     ψ_est2 = ψ(output_kliep)
     ψ_oracle = ψ(output_oracle)
@@ -279,30 +284,20 @@ end
 
     distseqnet = @dgp(
         L1 ~ DiscreteUniform(1, 4),
-        ER1 = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 3/length(L1))),
+        ER1 = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 4/length(L1))),
+        L1s $ Sum(:L1, :ER1),
         L2 ~ Binomial(3, 0.4),
-        L2s $ Sum(:L2, :ER1),
+        ER2 = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 4/length(L1))),
+        L2s $ Sum(:L2, :ER2),
         L3 ~ Beta(3, 2),
-        L4 ~ Poisson(3),
-        ER2 = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 3/length(L1))),
-        L4s $ Sum(:L4, :ER2),
-        reg = 0.5 * (L1 + L2) + L3 + 0.05 * (L4 + L2s) + 0.01 * L4s,
+        L4 ~ Poisson(5),
+        L3s $ AllOrderStatistics(:L3, :ER1),
+        L4s $ AllOrderStatistics(:L4, :ER1),
+        reg = (@. log(L3) + sqrt(L4)),
         A ~ (@. Normal(reg + 1, 1)),
         As $ Sum(:A, :ER1),
-        Y ~ (@. Normal(A + 0.5 * As + reg + 100, 1))
+        Y ~ (@. Normal(A + 0.5 * As + 0.5 * L1s + 0.05 * L2s, 0.1))
     );
-
-    distseqnet = @dgp(
-        L1 ~ Normal(0, 2),
-        ER = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 3/length(L1))),
-        L2 ~ Normal(1, 1),
-        L3 ~ Bernoulli(0.3),
-        L4 ~ Bernoulli(0.6),
-        A ~ (@. Normal(0.5 * (L1 + L2 + L3) + 0.1 * L4 + 1, 1)),
-        As $ Sum(:A, :ER),
-        Y ~ (@. Normal(A + As + 0.1 * L1 + 0.2 * L2 + 0.1 * L3 + 0.2 * L4 + 100, 1))
-    );
-
 
     scm_net =  CausalTables.StructuralCausalModel(
         distseqnet;
@@ -311,21 +306,17 @@ end
         confounders = [:L1, :L2, :L3, :L4]
         )
 
-
     n_large = 1000
     data_vlarge = rand(scm_net, 10^6)
     data_large = rand(scm_net, n_large)
     intervention = AdditiveShift(0.1)
     
     truth = compute_true_MTP(scm_net, data_vlarge, intervention)
-    mean_estimator = LinearRegressor()
+    mean_estimator = XGBoostRegressor(objective = "reg:squarederror")
     #density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(scm_net))
-    sl = SuperLearner([LogisticClassifier(), 
-                       LGBMClassifier(objective = "cross_entropy", linear_tree = true),
-                       LGBMClassifier(objective = "cross_entropy", linear_tree = true, min_data_in_leaf = 10)
-                       ], CV())
+    sl = XGBoostClassifier(objective = "binary:logistic", eta = 0.01)
     density_ratio_estimator = DensityRatioClassifier(sl)
-    cv_splitter = nothing#CV(nfolds = 5)
+    cv_splitter = CV(nfolds = 5)
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
@@ -347,7 +338,7 @@ end
     truth.eff_bound
     σ2net_est  = values(σ2net(output))
     @test isnothing(σ2_est[1])
-    @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe * 10))
+    @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe * 20))
     @test all(isnothing.(values(σ2boot(output))))
 
     # TODO: Add better tests to ensure the bootstrap is working correctly

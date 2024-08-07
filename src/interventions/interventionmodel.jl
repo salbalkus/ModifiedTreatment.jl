@@ -25,9 +25,10 @@ function get_summarized_data(O)
     
     # Apply summary function to the data and select only the variables that are not the response
     Os = CausalTables.summarize(O)
+    Os = CausalTables.replace(Os; data = Os |> Replace(missing => NaN))
 
-    treatment_name_vec = CausalTables.treatmentnames(Os; include_summary = false)
-    summary_name_vec = CausalTables.treatmentsummarynames(Os)
+    treatment_name_vec = O.treatment
+    summary_name_vec = [nm for (nm, sm) in zip(keys(Os.summaries), Os.summaries) if CausalTables.gettarget(sm) ∈ treatment_name_vec]
 
     # Error handling
     if length(treatment_name_vec) != 1 || length(summary_name_vec) > 1
@@ -37,7 +38,7 @@ function get_summarized_data(O)
         summary_name = isempty(summary_name_vec) ? nothing : summary_name_vec[1]
     end
     LAs = CausalTables.responseparents(Os)
-    L = CausalTables.confounders(Os; include_summary = false)
+    L = CausalTables.confounders(Os)
     A = CausalTables.treatment(LAs)
     
     return LAs, L, A, treatment_name, summary_name
