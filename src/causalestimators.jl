@@ -44,7 +44,7 @@ TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
 # functions to compute estimators from nuisance parameters
 
-eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
+eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn)
 
 plugin_transform(Qδn::AbstractArray) = PlugInResult(mean(Qδn))
 plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
@@ -69,11 +69,11 @@ function sipw(Y::AbstractArray, Hn::AbstractArray, G::AbstractMatrix)
 end
 
 function onestep(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, G::AbstractMatrix)
-    D = eif(Hn, Y, Qn, Qδn)
+    D = eif(Hn, Y, Qn, Qδn) .+ neighbor_center(Qδn, G)
     ψ = mean(D)
-    D = D .- ψ
-    σ2 = mean(D.^2) / length(D)
-    σ2net = cov_unscaled(D, G) / (length(D)^2)
+    σ2 = mean((D .- ψ).^2) / length(D)
+
+    σ2net = network_variance(D, G)
     return OneStepResult(ψ, σ2, σ2net)
 end
 
@@ -102,7 +102,7 @@ function tmle_fromscaled(Y::AbstractArray, Qn::AbstractArray, Y01::AbstractArray
     # Estimate variance
     D = eif(Hn, Y, Qn, Qδn) .- ψ
     σ2 = mean(D.^2) / length(D)
-    σ2net = cov_unscaled(D, G) / (length(D)^2)
+    σ2net = network_variance(D, G)
     return TMLEResult(ψ, σ2, σ2net)
 end
 

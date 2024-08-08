@@ -15,7 +15,6 @@ KNNRegressor = @load KNNRegressor pkg=NearestNeighborModels
 LGBMRegressor = @load LGBMRegressor pkg=LightGBM
 XGBoostRegressor = @load XGBoostRegressor pkg=XGBoost
 
-
 # Classifiers
 LogisticClassifier = @load LogisticClassifier pkg=MLJLinearModels
 LGBMClassifier = @load LGBMClassifier pkg=LightGBM
@@ -290,10 +289,11 @@ end
 
     distseqnet = @dgp(
         L1 ~ DiscreteUniform(1, 4),
-        ER1 = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 4/length(L1))),
+        ER1 = Graphs.adjacency_matrix(erdos_renyi(length(L1), 4/length(L1))),
+        ER2 = ER1,
         L1s $ Sum(:L1, :ER1),
         L2 ~ Binomial(3, 0.4),
-        ER2 = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 4/length(L1))),
+        #ER2 = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 4/length(L1))),
         L2s $ Sum(:L2, :ER2),
         L3 ~ Beta(3, 2),
         L4 ~ Poisson(5),
@@ -349,8 +349,19 @@ end
     # Test the cluster bootstrap
     B = 100
     ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
-    @test !all(within.(values(σ2boot(output))[4:5] .* n_large, truth.eff_bound, moe))
+    σ2boot_est = σ2boot(output)
+    @test !all(within.(values()[4:5] .* n_large, truth.eff_bound, moe))
     @test all(values(σ2boot(output)) .< moe)
+
+    sim = []
+    for i in 1:100
+        data_large = rand(scm_net, n_large)
+        mtpmach = machine(mtp, data_large, intervention) |> fit!
+        output = ModifiedTreatment.estimate(mtpmach, intervention)
+        push!(sim, ψ(output).tmle)
+    end
+
+    var(sim)
 
 
 end

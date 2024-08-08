@@ -16,6 +16,18 @@ function bound!(X::Vector; lower = -Inf, upper = Inf)
     X[X .< lower] .= lower
 end
 
-cov_unscaled(x::Vector, G::AbstractMatrix) = (transpose(x) * G * x)
+cov_unscaled(x::AbstractArray, G::AbstractMatrix) = (transpose(x) * G * x)
+
+function neighbor_center(X::AbstractArray, G::AbstractMatrix)
+    k_neighbors = Int.(G * ones(length(X)))
+    k_neighbors_unique = unique(k_neighbors)
+    ψ_by_k = Dict(k_neighbors_unique .=> [mean(X[k_neighbors .== k]) for k in k_neighbors_unique])
+    return([ψ_by_k[k] for k in k_neighbors])
+end
+
+function network_variance(D::AbstractArray, G::AbstractMatrix)
+    Dc = D .- neighbor_center(D, G)
+    return(cov_unscaled(Dc, G) / (length(D)))
+end
 
 
