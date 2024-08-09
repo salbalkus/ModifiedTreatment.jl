@@ -166,7 +166,7 @@ end
     # Start by testing the deterministic version
     X = data_iid |> TableTransforms.Select(:L1, :A)
     y = Tables.getcolumn(data_iid, data_iid.response[1])
-    sl = SuperLearner([DeterministicConstantRegressor(), LinearRegressor(), DecisionTreeRegressor(), KNNRegressor()], CV())
+    sl = SuperLearner([DeterministicConstantRegressor(), LinearRegressor(), XGBoostRegressor(), KNNRegressor()], CV())
     
     mach = machine(sl, X, y) |> fit!
     yhat = predict(mach, X)

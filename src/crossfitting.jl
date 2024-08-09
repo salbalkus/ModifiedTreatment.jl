@@ -90,9 +90,9 @@ function MMI.predict(::DecomposedPropensityRatio, fitresult, Xy_nu, Xy_de)
 end
 
 mutable struct SuperLearnerDeterministic <: MMI.Deterministic 
-    models::Array{MMI.Deterministic, 1}
+    models::Vector{<:MMI.Deterministic}
     resampling::MT.ResamplingStrategy
-    SuperLearnerDeterministic(models::Array{MMI.Deterministic, 1}, resampling = CV()) = new(models, resampling)
+    SuperLearnerDeterministic(models::Vector{<:MMI.Deterministic}, resampling = CV()) = new(models, resampling)
 end
 
 function MMI.fit(sl::SuperLearnerDeterministic, verbosity, X, y)
@@ -111,9 +111,9 @@ end
 MMI.predict(sl::SuperLearnerDeterministic, fitresult, X) = MMI.predict(fitresult.best_mach, X)
 
 mutable struct SuperLearnerProbabilistic <: MMI.Probabilistic 
-    models::Array{MMI.Probabilistic , 1}
+    models::Vector{<:MMI.Probabilistic}
     resampling::MT.ResamplingStrategy
-    SuperLearnerProbabilistic(models::Array{MMI.Probabilistic , 1}, resampling = CV()) = new(models, resampling)
+    SuperLearnerProbabilistic(models::Vector{<:MMI.Probabilistic}, resampling = CV()) = new(models, resampling)
 end
 
 function MMI.fit(sl::SuperLearnerProbabilistic, verbosity, X, y)
@@ -132,11 +132,8 @@ end
 MMI.predict(sl::SuperLearnerProbabilistic, fitresult, X) = MMI.predict(fitresult.best_mach, X)
 
 
-
-
-
-SuperLearner(models::Array{MMI.Deterministic, 1}, resampling) = SuperLearnerDeterministic(models, resampling)
-SuperLearner(models::Array{MMI.Probabilistic, 1}, resampling) = SuperLearnerProbabilistic(models, resampling)
+SuperLearner(models::Vector{<:MMI.Deterministic}, resampling) = SuperLearnerDeterministic(models, resampling)
+SuperLearner(models::Vector{<:MMI.Probabilistic}, resampling) = SuperLearnerProbabilistic(models, resampling)
 
 
 
