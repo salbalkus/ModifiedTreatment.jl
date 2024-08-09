@@ -27,10 +27,11 @@ function compute_true_MTP(dgp, data, intervention)
     
     # Compute the EIF and get g-computation result
     ψ = mean(Q0bar_shift)
-    D = Hn_aux .* (Y .- Q0bar_noshift) .+ (Q0bar_shift .- ψ)
 
-    G = CausalTables.dependency_matrix(data)
-    eff_bound = cov_unscaled(D, G) / length(D)
+    GA = CausalTables.adjacency_matrix(data)
+    GD = CausalTables.dependency_matrix(data)
+    D = Hn_aux .* (Y .- Q0bar_noshift) .+ Q0bar_shift
+    eff_bound = network_variance(D, GA, GD) * length(D)
     true_result = (ψ = ψ, ψ_dif = ψ - mean(Y), eff_bound = eff_bound)
     return true_result
 end

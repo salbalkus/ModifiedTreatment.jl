@@ -13,7 +13,8 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     δ = source(Δ)
     Os = source(O)
     Y = _get_response_vector(Os)
-    G = CausalTables.dependency_matrix(Os)
+    GA = CausalTables.adjacency_matrix(Os)
+    GD = CausalTables.dependency_matrix(Os)
 
     model_intervention = InterventionModel()
     LAs, Ls, As, LAδs, dAδs, LAδsinv, dAδsinv = intervene_on_data(model_intervention, Os, δ)
@@ -23,7 +24,7 @@ function MLJBase.prefit(mtp::MTP, verbosity, O::CausalTable, Δ::Intervention)
     Qn, Qδn, Hn, Hshiftn = estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs, dAδsinv)
 
     # Get causal estimates
-    plugin_est, ipw_est, sipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
+    plugin_est, ipw_est, sipw_est, onestep_est, tmle_est = estimate_causal_parameters(Y, GA, GD, Qn, Qδn, Hn, Hshiftn)
 
     return (; 
         plugin = plugin_est,
@@ -59,7 +60,7 @@ tmle(machine, δnew::Intervention) = MTPResult(MLJBase.unwrap(machine.fitresult)
 estimate(machine::Machine, δnew::Intervention) = MTPResult(
     (plugin = MLJBase.unwrap(machine.fitresult).plugin(δnew),
      ipw = MLJBase.unwrap(machine.fitresult).ipw(δnew),
-     sipw = MLJBase.unwrap(machine.fitresult).sipw(δnew),
+     #sipw = MLJBase.unwrap(machine.fitresult).sipw(δnew),
      onestep = MLJBase.unwrap(machine.fitresult).onestep(δnew),
      tmle = MLJBase.unwrap(machine.fitresult).tmle(δnew)
     ),
@@ -145,10 +146,11 @@ function estimate_nuisances(mach_mean, mach_density, LAs, LAδs, LAδsinv, dAδs
     return Qn, Qδn, Hn, Hshiftn
 end
 
-function estimate_causal_parameters(Y, G, Qn, Qδn, Hn, Hshiftn)
-    mach_ipw = machine(IPW(), Y, G) |> fit!
-    mach_onestep = machine(OneStep(), Y, Qn, G) |> fit!
-    mach_tmle = machine(TMLE(), Y, Qn, G) |> fit!
+function estimate_causal_parameters(Y, GA, GD, Qn, Qδn, Hn, Hshiftn)
+
+    mach_ipw = machine(IPW(), Y, GA, GD) |> fit!
+    mach_onestep = machine(OneStep(), Y, Qn, GA, GD) |> fit!
+    mach_tmle = machine(TMLE(), Y, Qn, GA, GD) |> fit!
 
     plugin_est = plugin_transform(Qδn)
     ipw_est = node(Hn -> MMI.transform(mach_ipw, Hn, false), Hn)

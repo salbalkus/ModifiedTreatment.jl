@@ -44,48 +44,48 @@ TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
 
 # functions to compute estimators from nuisance parameters
 
-eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn)
+eif(Hn, Y, Qn, Qδn) = Hn .* (Y .- Qn) .+ Qδn
 
 plugin_transform(Qδn::AbstractArray) = PlugInResult(mean(Qδn))
 plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 
 # define basic estimators
-function ipw(Y::AbstractArray, Hn::AbstractArray, G::AbstractMatrix)
-
-    ψ = mean(Hn .* Y)
-    estimating_function = (Hn .* Y) .- ψ
+function ipw(Y::AbstractArray, Hn::AbstractArray, GA::AbstractMatrix, GD::AbstractMatrix)
+    estimating_function = Hn .* Y
+    ψ = mean(estimating_function)
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
-    σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
+    σ2net = network_variance(estimating_function, GA, GD)
     return IPWResult(ψ, σ2, σ2net, false)
 end
 
-function sipw(Y::AbstractArray, Hn::AbstractArray, G::AbstractMatrix)
+# TODO: Add network variance
+function sipw(Y::AbstractArray, Hn::AbstractArray, GA::AbstractMatrix, GD::AbstractMatrix)
     weight_mean = mean(Hn)
-    ψ = mean((Hn .* Y) ./ weight_mean)
+    HnY = Hn .* Y ./ weight_mean
+    ψ = mean(HnY)
     estimating_function = Hn .* (Y .- ψ) ./ weight_mean
     σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
-    σ2net = cov_unscaled(estimating_function, G) / (length(estimating_function)^2)
-    return IPWResult(ψ, σ2, σ2net, true)
+    #σ2net = network_variance(estimating_function, GA, GD)
+    return IPWResult(ψ, σ2, nothing, true)
 end
 
-function onestep(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, G::AbstractMatrix)
-    D = eif(Hn, Y, Qn, Qδn) .+ neighbor_center(Qδn, G)
+function onestep(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, GA::AbstractMatrix, GD::AbstractMatrix)
+    D = eif(Hn, Y, Qn, Qδn)
     ψ = mean(D)
-    σ2 = mean((D .- ψ).^2) / length(D)
-
-    σ2net = network_variance(D, G)
+    σ2 = var(D) / length(D)
+    σ2net = network_variance(D, GA, GD)
     return OneStepResult(ψ, σ2, σ2net)
 end
 
-function tmle(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, Hshiftn::AbstractArray, G::AbstractMatrix)
+function tmle(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, Hshiftn::AbstractArray, GA::AbstractMatrix, GD::AbstractMatrix)
     scaler = StatsBase.fit(UnitRangeTransform, Y, dims = 1)
     Y01 = StatsBase.transform(scaler, Y)
     Qn01 = StatsBase.transform(scaler, Qn)
     Qn01 = bound(Qn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
-    return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, G, scaler)
+    return tmle_fromscaled(Y, Qn, Y01, Qn01, Qδn, Hn, Hshiftn, GA, GD, scaler)
 end
 
-function tmle_fromscaled(Y::AbstractArray, Qn::AbstractArray, Y01::AbstractArray, Qn01::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, Hshiftn::AbstractArray, G::AbstractMatrix, scaler)
+function tmle_fromscaled(Y::AbstractArray, Qn::AbstractArray, Y01::AbstractArray, Qn01::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, Hshiftn::AbstractArray, GA::AbstractMatrix, GD::AbstractMatrix, scaler)
     fit_data = MLJBase.table(hcat(Y01, Hn), names = ["Y", "Hn"])
     # Fit the logistic regression model
     # The 0 + is needed to fit the model with an intercept of 0
@@ -100,9 +100,9 @@ function tmle_fromscaled(Y::AbstractArray, Qn::AbstractArray, Y01::AbstractArray
     ψ = mean(Qstar)
 
     # Estimate variance
-    D = eif(Hn, Y, Qn, Qδn) .- ψ
-    σ2 = mean(D.^2) / length(D)
-    σ2net = network_variance(D, G)
+    D = eif(Hn, Y, Qn, Qδn)
+    σ2 = var(D) / length(D)
+    σ2net = network_variance(D, GA, GD)
     return TMLEResult(ψ, σ2, σ2net)
 end
 
@@ -111,25 +111,25 @@ end
 abstract type CausalEstimator <: MMI.Unsupervised end
 
 mutable struct IPW <: CausalEstimator end
-MMI.fit(::IPW, verbosity, Y, G) = (fitresult = (; Y = Y, G = G), cache = nothing, report = nothing)
-MMI.transform(::IPW, fitresult, Hn, stabilized) = stabilized ? sipw(fitresult.Y, Hn, fitresult.G) : ipw(fitresult.Y, Hn, fitresult.G)
+MMI.fit(::IPW, verbosity, Y, GA, GD) = (fitresult = (; Y = Y, GA = GA, GD = GD), cache = nothing, report = nothing)
+MMI.transform(::IPW, fitresult, Hn, stabilized) = stabilized ? sipw(fitresult.Y, Hn, fitresult.GA, fitresult.GD) : ipw(fitresult.Y, Hn, fitresult.GA, fitresult.GD)
 
 
 mutable struct OneStep <: CausalEstimator end
-MMI.fit(::OneStep, verbosity, Y, Qn, G) = (fitresult = (; Y = Y, Qn = Qn, G = G), cache = nothing, report = nothing)
-MMI.transform(::OneStep, fitresult, Qδn, Hn) = onestep(fitresult.Y, fitresult.Qn, Qδn, Hn, fitresult.G)
+MMI.fit(::OneStep, verbosity, Y, Qn, GA, GD) = (fitresult = (; Y = Y, Qn = Qn, GA = GA, GD = GD), cache = nothing, report = nothing)
+MMI.transform(::OneStep, fitresult, Qδn, Hn) = onestep(fitresult.Y, fitresult.Qn, Qδn, Hn, fitresult.GA, fitresult.GD)
 
 mutable struct TMLE <: CausalEstimator end
 
-function MMI.fit(::TMLE, verbosity, Y, Qn, G)
+function MMI.fit(::TMLE, verbosity, Y, Qn, GA, GD)
     scaler = StatsBase.fit(UnitRangeTransform, Y, dims = 1)
     Y01 = StatsBase.transform(scaler, Y)
     Qn01 = StatsBase.transform(scaler, Qn)
     bound!(Qn01; lower = UNIT_LOWER_BOUND, upper = UNIT_UPPER_BOUND)
-    (fitresult = (; Y = Y, Qn = Qn, Y01 = Y01, Qn01 = Qn01, G = G, scaler = scaler), cache = nothing, report = nothing)
+    (fitresult = (; Y = Y, Qn = Qn, Y01 = Y01, Qn01 = Qn01, GA = GA, GD = GD, scaler = scaler), cache = nothing, report = nothing)
 end
 
-MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn) = tmle_fromscaled(fitresult.Y, fitresult.Qn, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.G, fitresult.scaler)
+MMI.transform(::TMLE, fitresult, Qδn, Hn, Hshiftn) = tmle_fromscaled(fitresult.Y, fitresult.Qn, fitresult.Y01, fitresult.Qn01, Qδn, Hn, Hshiftn, fitresult.GA, fitresult.GD, fitresult.scaler)
 
 mutable struct MultiplierBootstrap <: CausalEstimator 
     B::Int

@@ -26,6 +26,7 @@ using Random
 Random.seed!(1)
 
 # function for testing approximate equality of statistical estimators
+
 within(x, truth, ϵ) = abs(x - truth) < ϵ
 
 dgp_iid = @dgp(
@@ -39,11 +40,13 @@ data_iid = rand(scm_iid, 100)
 dgp_net = @dgp(
     L1 ~ Binomial(5, 0.4),
     #ER = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(L1), 2)),
-    ER = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 5/length(L1))),
+    #ER = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 5/length(L1))),
+    ER = Graphs.adjacency_matrix(Graphs.static_scale_free(length(L1), 2 * length(L1), 3.5)),
+    #ER = Graphs.adjacency_matrix(Graphs.watts_strogatz(length(L1), 5, 0.5)),
     L1_s $ Sum(:L1, :ER),
-    A ~ (@. Normal(L1 + 1, 0.5)),
+    A ~ (@. Normal(L1 + 1, 1.0)),
     A_s $ Sum(:A, :ER),
-    Y ~ (@. Normal(A + 0.5 * A_s + L1 + L1_s + 10, 0.5))
+    Y ~ (@. Normal(A + 0.5 * A_s + L1 + 10, 0.5))
 );
 
 scm_net =  StructuralCausalModel(
@@ -312,12 +315,14 @@ end
         confounders = [:L1, :L2, :L3, :L4]
         )
 
-    n_large = 1000
+    n_large = 10000
     data_vlarge = rand(scm_net, 10^6)
     data_large = rand(scm_net, n_large)
+
     intervention = AdditiveShift(0.1)
     
     truth = compute_true_MTP(scm_net, data_vlarge, intervention)
+    #mean_estimator = LinearRegressor()
     mean_estimator = XGBoostRegressor(objective = "reg:squarederror")
     #density_ratio_estimator = DensityRatioPlugIn(OracleDensityEstimator(scm_net))
     sl = XGBoostClassifier(objective = "binary:logistic", eta = 0.01)
@@ -326,7 +331,6 @@ end
 
     mtp = MTP(mean_estimator, density_ratio_estimator, cv_splitter)
     mtpmach = machine(mtp, data_large, intervention) |> fit!
-    
     output = ModifiedTreatment.estimate(mtpmach, intervention)
     ψ_est = ψ(output)
     @test within(ψ_est.plugin, truth.ψ, moe)
@@ -341,6 +345,7 @@ end
     @test !all(within.(values(σ2_est)[4:5] .* n_large, truth.eff_bound, moe))
     
     σ2net_est = values(σ2net(output))
+    values(σ2net_est)[3:4] .* n_large
     @test isnothing(σ2_est[1])
     @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe * 20))
     @test all(isnothing.(values(σ2boot(output))))
@@ -354,15 +359,37 @@ end
     @test all(values(σ2boot(output)) .< moe)
 
     sim = []
+    using Logging
+    disable_logging(Logging.Info)
+    disable_logging(Logging.Warn)
     for i in 1:100
         data_large = rand(scm_net, n_large)
-        mtpmach = machine(mtp, data_large, intervention) |> fit!
+        mtpmach = fit!(machine(mtp, data_large, intervention), verbosity=0) 
         output = ModifiedTreatment.estimate(mtpmach, intervention)
         push!(sim, ψ(output).tmle)
     end
-
     var(sim)
 
+    r = report(mtpmach)
+    D  = r.Hn .* (data_large.data.Y .- r.Qn) .+ r.Qδn
+    G = CausalTables.dependency_matrix(data_large)
+    D = D .- ModifiedTreatment.neighbor_center(D, data_large.arrays.ER)
+    
+    transpose(D) * G * D / n_large^2
+
+    gamma = 20
+    using SparseArrays
+    using LinearAlgebra
+    V = Matrix(G .+ (gamma * sparse(I, n_large, n_large)))
+    #V = Matrix(gamma .* sparse(I, n_large, n_large) .+ 1)
+    edist = MvNormal(V)
+
+    e = rand(edist, 100000)
+    fullvar = var(mean(D .* e, dims = 1))
+    v = var(D) / n_large
+    
+    cv = (fullvar .- (v .* gamma))
+    bootvar = v + cv
 
 end
 

@@ -6,6 +6,7 @@ CausalTables.confounders(O::AbstractNode) = node(CausalTables.confounders, O)
 CausalTables.summarize(O::AbstractNode) = node(CausalTables.summarize, O)
 CausalTables.replace(O::AbstractNode; data::AbstractNode = nothing) = node((x, data) -> CausalTables.replacetable(x; data = data), O, data)
 CausalTables.data(O::AbstractNode) = node(CausalTables.data, O)
+CausalTables.adjacency_matrix(O::AbstractNode) = node(CausalTables.adjacency_matrix, O)
 CausalTables.dependency_matrix(O::AbstractNode) = node(CausalTables.dependency_matrix, O)
 
 # Overload the merge function for nodes
