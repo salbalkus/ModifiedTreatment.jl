@@ -25,21 +25,27 @@ mutable struct OneStepResult <: CausalEstimatorResult
     ψ::Estimate
     σ2::Estimate
     σ2net::Estimate
+    σ2cond::Estimate
     σ2boot::Estimate
 end
-OneStepResult(ψ, σ2) = OneStepResult(ψ, σ2, nothing, nothing)
-OneStepResult(ψ, σ2, σ2net) = OneStepResult(ψ, σ2, σ2net, nothing)
+OneStepResult(ψ, σ2) = OneStepResult(ψ, σ2, nothing, nothing, nothing)
+OneStepResult(ψ, σ2, σ2net) = OneStepResult(ψ, σ2, σ2net, nothing, nothing)
+OneStepResult(ψ, σ2, σ2net, σ2cond) = OneStepResult(ψ, σ2, σ2net, σ2cond, nothing)
+
 
 
 mutable struct TMLEResult <: CausalEstimatorResult
     ψ::Estimate
     σ2::Estimate
     σ2net::Estimate
+    σ2cond::Estimate
     σ2boot::Estimate
 end
 
-TMLEResult(ψ, σ2) = TMLEResult(ψ, σ2, nothing, nothing)
-TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing)
+TMLEResult(ψ, σ2) = TMLEResult(ψ, σ2, nothing, nothing, nothing)
+TMLEResult(ψ, σ2, σ2net) = TMLEResult(ψ, σ2, σ2net, nothing, nothing)
+TMLEResult(ψ, σ2, σ2net, σ2cond) = TMLEResult(ψ, σ2, σ2net, σ2cond, nothing)
+
 
 
 # functions to compute estimators from nuisance parameters
@@ -74,7 +80,8 @@ function onestep(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::A
     ψ = mean(D)
     σ2 = var(D) / length(D)
     σ2net = network_variance(D, GA, GD)
-    return OneStepResult(ψ, σ2, σ2net)
+    σ2cond = mean((Hn .* (Y .- Qn)).^2)
+    return OneStepResult(ψ, σ2, σ2net, σ2cond)
 end
 
 function tmle(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, Hshiftn::AbstractArray, GA::AbstractMatrix, GD::AbstractMatrix)
@@ -103,7 +110,8 @@ function tmle_fromscaled(Y::AbstractArray, Qn::AbstractArray, Y01::AbstractArray
     D = eif(Hn, Y, Qn, Qδn)
     σ2 = var(D) / length(D)
     σ2net = network_variance(D, GA, GD)
-    return TMLEResult(ψ, σ2, σ2net)
+    σ2cond = mean((Hn .* (Y .- Qn)).^2)
+    return TMLEResult(ψ, σ2, σ2net, σ2cond)
 end
 
 # Define MLJ-type estimaator machines for the learning network
@@ -195,6 +203,14 @@ function σ2net(x::MTPResult)
         return est.σ2net
     else
         return map(e -> hasproperty(e, :σ2net) ?  e.σ2net : nothing, est)
+    end
+end
+function σ2cond(x::MTPResult)
+    est = getestimate(x)
+    if typeof(est) == CausalEstimatorResult
+        return est.σ2cond
+    else
+        return map(e -> hasproperty(e, :σ2cond) ?  e.σ2cond : nothing, est)
     end
 end
 
