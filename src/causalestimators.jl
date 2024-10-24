@@ -59,7 +59,7 @@ plugin_transform(Qδn::Node) = node(Qδn -> plugin_transform(Qδn), Qδn)
 function ipw(Y::AbstractArray, Hn::AbstractArray, GA::AbstractMatrix, GD::AbstractMatrix)
     estimating_function = Hn .* Y
     ψ = mean(estimating_function)
-    σ2 = (estimating_function' * estimating_function) / length(estimating_function)
+    σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
     σ2net = network_variance(estimating_function, GA, GD)
     return IPWResult(ψ, σ2, σ2net, false)
 end
@@ -70,7 +70,7 @@ function sipw(Y::AbstractArray, Hn::AbstractArray, GA::AbstractMatrix, GD::Abstr
     HnY = Hn .* Y ./ weight_mean
     ψ = mean(HnY)
     estimating_function = Hn .* (Y .- ψ) ./ weight_mean
-    σ2 = (estimating_function' * estimating_function) / length(estimating_function)
+    σ2 = (estimating_function' * estimating_function) / (length(estimating_function)^2)
     #σ2net = network_variance(estimating_function, GA, GD)
     return IPWResult(ψ, σ2, nothing, true)
 end
@@ -78,9 +78,9 @@ end
 function onestep(Y::AbstractArray, Qn::AbstractArray, Qδn::AbstractArray, Hn::AbstractArray, GA::AbstractMatrix, GD::AbstractMatrix)
     D = eif(Hn, Y, Qn, Qδn)
     ψ = mean(D)
-    σ2 = var(D)
+    σ2 = var(D) / length(D)
     σ2net = network_variance(D, GA, GD)
-    σ2cond = mean((Hn .* (Y .- Qn)).^2)
+    σ2cond = mean((Hn .* (Y .- Qn)).^2) / length(D)
     return OneStepResult(ψ, σ2, σ2net, σ2cond)
 end
 
@@ -108,7 +108,7 @@ function tmle_fromscaled(Y::AbstractArray, Qn::AbstractArray, Y01::AbstractArray
 
     # Estimate variance
     D = eif(Hn, Y, Qn, Qδn)
-    σ2 = var(D)
+    σ2 = var(D, mean = ψ) / length(D)
     σ2net = network_variance(D, GA, GD)
     σ2cond = mean((Hn .* (Y .- Qn)).^2)
     return TMLEResult(ψ, σ2, σ2net, σ2cond)
