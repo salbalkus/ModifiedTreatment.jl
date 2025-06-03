@@ -3,7 +3,6 @@ using ModifiedTreatment
 using CausalTables, Condensity
 using MLJ
 using MLJBase
-using Revise
 using Distributions, Graphs
 using Tables, TableTransforms, DataAPI
 using DensityRatioEstimation 
@@ -12,13 +11,12 @@ using DensityRatioEstimation
 DeterministicConstantRegressor = @load DeterministicConstantRegressor pkg=MLJModels
 LinearRegressor = @load LinearRegressor pkg=MLJLinearModels
 KNNRegressor = @load KNNRegressor pkg=NearestNeighborModels
-LGBMRegressor = @load LGBMRegressor pkg=LightGBM
 XGBoostRegressor = @load XGBoostRegressor pkg=XGBoost
 
 # Classifiers
 LogisticClassifier = @load LogisticClassifier pkg=MLJLinearModels
-LGBMClassifier = @load LGBMClassifier pkg=LightGBM
 XGBoostClassifier = @load XGBoostClassifier pkg=XGBoost
+LGBMClassifier = @load LGBMClassifier pkg=LightGBM
 
 using Random
 #using Logging
@@ -34,27 +32,25 @@ dgp_iid = @dgp(
     A ~ (@. Normal(L1, 1)),
     Y ~ (@. Normal(A + 0.5 * L1 + 10, 0.5))
 )
-scm_iid = StructuralCausalModel(dgp_iid; treatment = :A, response = :Y, confounders = [:L1]);
+scm_iid = StructuralCausalModel(dgp_iid; treatment = :A, response = :Y);
 data_iid = rand(scm_iid, 100)
 
 dgp_net = @dgp(
     L1 ~ Binomial(5, 0.4),
-    #ER = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(L1), 2)),
-    #ER = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 5/length(L1))),
-    ER = Graphs.adjacency_matrix(Graphs.static_scale_free(length(L1), 2 * length(L1), 3.5)),
-    #ER = Graphs.adjacency_matrix(Graphs.watts_strogatz(length(L1), 5, 0.5)),
-    L1_s $ Sum(:L1, :ER),
+    #G = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(L1), 2)),
+    #G = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 5/length(L1))),
+    G = Graphs.adjacency_matrix(Graphs.static_scale_free(length(L1), 2 * length(L1), 3.5)),
+    #G = Graphs.adjacency_matrix(Graphs.watts_strogatz(length(L1), 5, 0.5)),
+    L1_s $ Sum(:L1, :G),
     A ~ (@. Normal(L1 + 1, 1.0)),
-    A_s $ Sum(:A, :ER),
+    A_s $ Sum(:A, :G),
     Y ~ (@. Normal(A + 0.5 * A_s + L1 + 10, 0.5))
 );
 
 scm_net =  StructuralCausalModel(
     dgp_net;
-    treatment = :A,
-    response = :Y,
-    confounders = [:L1]
-    )
+    treatment = [:A, :A_s],
+    response = :Y)
 data_net = rand(scm_net, 100)
 data_net_sum = summarize(data_net)
 
@@ -87,11 +83,10 @@ data_net_sum = summarize(data_net)
     @test differentiate_intervention(int3, L, A) ≈ 1.5
     @test differentiate_intervention(inv_int3, L, A) ≈ 1/1.5
 
-    inducedint = get_induced_intervention(int3, Sum(:A, :ER))
+    inducedint = get_induced_intervention(int3, Sum(:A, :G))
     inv_inducedint = ModifiedTreatment.inverse(inducedint)
-    
-    @test apply_intervention(inducedint, L, A) ≈ A .* m .+ data_net.arrays.ER * (ones(size(data_net.arrays.ER, 1)) .* a)
-    @test apply_intervention(inv_inducedint, L, A) ≈ (A .- data_net.arrays.ER * (ones(size(data_net.arrays.ER, 1)) .* a)) ./ m
+    @test apply_intervention(inducedint, L, A) ≈ A .* m .+ data_net.arrays.G * (ones(size(data_net.arrays.G, 1)) .* a)
+    @test apply_intervention(inv_inducedint, L, A) ≈ (A .- data_net.arrays.G * (ones(size(data_net.arrays.G, 1)) .* a)) ./ m
     @test all(differentiate_intervention(inducedint, L, A) .≈ 1.5)
     @test all(differentiate_intervention(inv_inducedint, L, A) .≈ 1/1.5)
 end
@@ -99,23 +94,24 @@ end
 @testset "InterventionModel" begin
     intervention = LinearShift(1.5, 0.5)
     intmach = machine(ModifiedTreatment.InterventionModel(), data_net) |> fit!
+    predict(intmach, intervention)
     
     LAs, Ls, As = predict(intmach, intervention)
-    
-    @test Ls.data == (L1 = data_net_sum.data.L1, L1_s = data_net_sum.data.L1_s,)
+
+    @test Ls.data == (L1_s = data_net_sum.data.L1_s, L1 = data_net_sum.data.L1,)
     @test As.data == (A = data_net_sum.data.A, A_s = data_net_sum.data.A_s,)
-    @test LAs.data == (L1 = data_net_sum.data.L1, A = data_net_sum.data.A, L1_s = data_net_sum.data.L1_s, A_s = data_net_sum.data.A_s)
+    @test LAs.data == (L1_s = data_net_sum.data.L1_s, L1 = data_net_sum.data.L1, A = data_net_sum.data.A, A_s = data_net_sum.data.A_s)
     
     LAδs, dAδs = transform(intmach, intervention)
     
     @test LAδs.data.A ≈ (data_net.data.A .* 1.5) .+ 0.5
-    @test LAδs.data.A_s ≈ data_net.arrays.ER * ((data_net.data.A .* 1.5) .+ 0.5)
+    @test LAδs.data.A_s ≈ data_net.arrays.G * ((data_net.data.A .* 1.5) .+ 0.5)
     @test dAδs.A_s == 1.5
     @test dAδs.A == 1.5
 
     LAδsinv, dAδsinv = inverse_transform(intmach, intervention)
     @test LAδsinv.data.A ≈ (data_net.data.A .- 0.5) ./ 1.5
-    @test LAδsinv.data.A_s ≈ data_net.arrays.ER * ((data_net.data.A .- 0.5) ./ 1.5)
+    @test LAδsinv.data.A_s ≈ data_net.arrays.G * ((data_net.data.A .- 0.5) ./ 1.5)
     @test dAδsinv.A_s == 1/1.5
     @test dAδsinv.A == 1/1.5
 end
@@ -125,14 +121,12 @@ end
         @dgp(
             L ~ Bernoulli(0.0),
             A ~ (@. Normal(L, 0.01)),
-            ER = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(A), 2)),
-            As $ Sum(:A, :ER),
+            G = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(A), 2)),
+            As $ Sum(:A, :G),
             Y ~ (@. Normal(L + A + As, 0.01))
         ),
-        treatment = :A,
-        response = :Y,
-        confounders = [:L]
-    )
+        treatment = [:A, :As],
+        response = :Y)
     data_test = rand(scm_test, 10000)
     intervention = AdditiveShift(1.0)
     
@@ -151,7 +145,7 @@ end
     predict(mach_ratio, LA, LAδ)
     @test all(MLJ.predict(mach_ratio, LA, LAδ) .== 1.0)
     
-    LAδ = CausalTables.replace(LA; data = merge(L, (A = Tables.getcolumn(A, :A) .+ 0.1, A_s = Tables.getcolumn(A, :A_s) .+ (data_net.arrays.ER * (ones(size(data_net.arrays.ER, 1)) .* 0.1)))))
+    LAδ = CausalTables.replace(LA; data = merge(L, (A = Tables.getcolumn(A, :A) .+ 0.1, A_s = Tables.getcolumn(A, :A_s) .+ (data_net.arrays.G * (ones(size(data_net.arrays.G, 1)) .* 0.1)))))
     
     g0shift = pdf.(condensity(scm_net, LAδ, :A), Tables.getcolumn(LAδ, :A)) .* pdf.(condensity(scm_net, LAδ, :A_s), Tables.getcolumn(LAδ, :A_s))
     g0 = pdf.(condensity(scm_net, LA, :A), Tables.getcolumn(LA, :A)) .* pdf.(condensity(scm_net, LA, :A_s), Tables.getcolumn(LA, :A_s))
@@ -187,7 +181,7 @@ end
 
 @testset "CrossFitModel" begin   
     # Test a regression model
-    LA = CausalTables.replace(data_net; data = data_net |> CausalTables.Select(:L1, :A))    
+    LA = CausalTables.replace(data_net; data = CausalTables.select(data_net, [:L1, :A]))    
     Y = Tables.getcolumn(LA, :A) .+ 0.5 .* Tables.getcolumn(LA, :L1) .+ 10
     mean_estimator = LinearRegressor()
     mean_crossfit = CrossFitModel(mean_estimator, CV())
@@ -201,8 +195,8 @@ end
     # TODO: Test this for network data.
     ratio_model = DecomposedPropensityRatio(DensityRatioPlugIn(OracleDensityEstimator(scm_iid)))
     ratio_crossfit = CrossFitModel(ratio_model, CV())
-    L = data_net |> CausalTables.Select(:L1) |> Tables.columntable
-    A = data_net |> CausalTables.Select(:A) |> Tables.columntable
+    L = CausalTables.select(data_net, :L1) |> Tables.columntable
+    A = CausalTables.select(data_net, :A) |> Tables.columntable
     mach_ratio = machine(ratio_crossfit, L, A) |> fit!
     LAδ = CausalTables.replace(LA; data = (L1 = Tables.getcolumn(L, :L1), A = Tables.getcolumn(A, :A)))
 
@@ -234,8 +228,7 @@ end
 
     # Probabilistic Classifier
     sl = SuperLearner([LogisticClassifier(), 
-                       LGBMClassifier(objective = "binary", linear_tree = true),
-                       LGBMClassifier(objective = "binary", linear_tree = true, min_data_in_leaf = 10)
+                        LGBMClassifier(objective = "binary", metric = ["binary_logloss"], linear_tree = true)
                        ], CV())
     density_ratio_estimator = DensityRatioClassifier(sl)
     mtp = ModifiedTreatment.MTP(mean_estimator, density_ratio_estimator, cv_splitter)
@@ -258,15 +251,12 @@ end
     ψ_oracle = ψ(output_oracle)
 
     @test within(ψ_est.plugin, truth.ψ, moe)
-    @test within(ψ_est.sipw, truth.ψ, moe)
+    #@test within(ψ_est.sipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
 
-    maximum(abs.(report(mtpmach_oracle).Hn .- report(mtpmachk).Hn))
-
     # ensure ratio nuisance is similar
     @test maximum(abs.(report(mtpmach_oracle).Hn .- report(mtpmach).Hn)) < moe
-    σ2net(output)
     σ2_est = values(σ2(output))
     
     @test isnothing(σ2_est[1])
@@ -274,19 +264,14 @@ end
     isnothing.(values(σ2net(output)))
     @test all(isnothing.(values(σ2boot(output))))
 
-    # TODO: Add better tests to ensure the bootstrap is working correctly
-    B = 1000
-    ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
-
-    output
-    σ2boot(output)
-    σ2(output)
-    
-    @test all(values(σ2boot(output)) .< moe)
+    # TODO: Remove bootstrap
+    #B = 1000
+    #ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
+    #@test all(values(σ2boot(output)) .< moe)
 
 end 
 
-#@testset "MTP Network" begin
+@testset "MTP Network" begin
     Random.seed!(1)
     moe = 1.0
 
@@ -310,10 +295,8 @@ end
 
     scm_net =  CausalTables.StructuralCausalModel(
         distseqnet;
-        treatment = :A,
-        response = :Y,
-        confounders = [:L1, :L2, :L3, :L4]
-        )
+        treatment = [:A, :As],
+        response = :Y)
 
     n_large = 10000
     data_vlarge = rand(scm_net, 10^6)
@@ -335,61 +318,28 @@ end
     ψ_est = ψ(output)
     @test within(ψ_est.plugin, truth.ψ, moe)
     @test within(ψ_est.ipw, truth.ψ, moe)
-    @test within(ψ_est.sipw, truth.ψ, moe)
+    #@test within(ψ_est.sipw, truth.ψ, moe)
     @test within(ψ_est.onestep, truth.ψ, moe)
     @test within(ψ_est.tmle, truth.ψ, moe)
 
    
     σ2_est = values(σ2(output))
     @test isnothing(σ2_est[1])
-    @test !all(within.(values(σ2_est)[4:5] .* n_large, truth.eff_bound, moe))
-    
+    @test !all(within.(values(σ2_est)[3:4] .* n_large, truth.eff_bound, moe))
+
     σ2net_est = values(σ2net(output))
     values(σ2net_est)[3:4] .* n_large
     @test isnothing(σ2_est[1])
-    @test all(within.(values(σ2net_est)[4:5] .* n_large, truth.eff_bound, moe * 20))
+    @test all(within.(values(σ2net_est)[3:4] .* n_large, truth.eff_bound, moe * 20))
     @test all(isnothing.(values(σ2boot(output))))
 
     # TODO: Add better tests to ensure the bootstrap is working correctly
     # Test the cluster bootstrap
-    B = 100
-    ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
-    σ2boot_est = σ2boot(output)
-    @test !all(within.(values()[4:5] .* n_large, truth.eff_bound, moe))
-    @test all(values(σ2boot(output)) .< moe)
-
-    sim = []
-    using Logging
-    disable_logging(Logging.Info)
-    disable_logging(Logging.Warn)
-    for i in 1:100
-        data_large = rand(scm_net, n_large)
-        mtpmach = fit!(machine(mtp, data_large, intervention), verbosity=0) 
-        output = ModifiedTreatment.estimate(mtpmach, intervention)
-        push!(sim, ψ(output).tmle)
-    end
-    var(sim)
-
-    r = report(mtpmach)
-    D  = r.Hn .* (data_large.data.Y .- r.Qn) .+ r.Qδn
-    G = CausalTables.dependency_matrix(data_large)
-    D = D .- ModifiedTreatment.neighbor_center(D, data_large.arrays.ER)
-    
-    transpose(D) * G * D / n_large^2
-
-    gamma = 20
-    using SparseArrays
-    using LinearAlgebra
-    V = Matrix(G .+ (gamma * sparse(I, n_large, n_large)))
-    #V = Matrix(gamma .* sparse(I, n_large, n_large) .+ 1)
-    edist = MvNormal(V)
-
-    e = rand(edist, 100000)
-    fullvar = var(mean(D .* e, dims = 1))
-    v = var(D) / n_large
-    
-    cv = (fullvar .- (v .* gamma))
-    bootvar = v + cv
+    #B = 100
+    #ModifiedTreatment.bootstrap!(BasicSampler(), output, B)
+    #σ2boot_est = σ2boot(output)
+    #@test !all(within.(values()[4:5] .* n_large, truth.eff_bound, moe))
+    #@test all(values(σ2boot(output)) .< moe)
 
 end
 

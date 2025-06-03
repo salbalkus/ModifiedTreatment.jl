@@ -27,18 +27,20 @@ function get_summarized_data(O)
     Os = CausalTables.summarize(O)
     Os = CausalTables.replace(Os; data = Os |> Replace(missing => NaN))
 
-    treatment_name_vec = O.treatment
-    summary_name_vec = [nm for (nm, sm) in zip(keys(Os.summaries), Os.summaries) if CausalTables.gettarget(sm) ∈ treatment_name_vec]
-
     # Error handling
-    if length(treatment_name_vec) != 1 || length(summary_name_vec) > 1
+    nonsummary_treatments = Os.treatment[map(x -> x ∉ keys(Os.summaries), Os.treatment)]
+    summary_treatments = Os.treatment[map(x -> x ∈ keys(Os.summaries), Os.treatment)]
+    if (length(nonsummary_treatments) > 1) || (length(summary_treatments) > 1)
         throw(ArgumentError("InterventionModel only supports a single treatment variable and a single summary variable."))
     else
-        treatment_name = treatment_name_vec[1]
-        summary_name = isempty(summary_name_vec) ? nothing : summary_name_vec[1]
+        treatment_name = isempty(nonsummary_treatments) ? nothing : nonsummary_treatments[1]
+        summary_name = isempty(summary_treatments) ? nothing : summary_treatments[1]
+        if !isnothing(summary_name) && !isnothing(treatment_name) && CausalTables.gettarget(Os.summaries[summary_name]) != treatment_name
+            throw(ArgumentError("Summary treatment does not summarize the non-summarized treatment."))
+        end
     end
     LAs = CausalTables.responseparents(Os)
-    L = CausalTables.confounders(Os)
+    L = CausalTables.treatmentparents(Os)
     A = CausalTables.treatment(LAs)
     
     return LAs, L, A, treatment_name, summary_name

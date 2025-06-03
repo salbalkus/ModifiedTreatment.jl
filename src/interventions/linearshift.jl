@@ -32,6 +32,7 @@ function inverse(intervention::LinearShift)
     return LinearShift(δa_new, δb_new)
 end
 
+# TODO: Remove the error, handle the case where δa is not constant
 function get_induced_intervention(intervention::LinearShift, summary::Sum)
     if intervention.δa_is_constant
         return LinearShift(intervention.δa, L -> (L.arrays[summary.matrix] * (ones(size(L.arrays[summary.matrix], 1)) .* intervention.δb(L))))# .+ (summary.include_self ? intervention.δb(L) : 0))
