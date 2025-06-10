@@ -13,8 +13,8 @@ function compute_true_MTP(dgp, data, intervention)
     LAδsinv, dAδsinv = inverse_transform(intmach, intervention)
 
     # Compute conditional means of response
-    Q0bar_noshift = conmean(dgp, data, Ysymb)
-    Q0bar_shift = conmean(dgp, CausalTables.replace(LAδs; tbl = merge(LAδs.data, (Y = Y,))), Ysymb)
+    Q0bar_noshift = conmean(dgp, LAs, Ysymb)
+    Q0bar_shift = conmean(dgp, LAδs, Ysymb)
 
     # Compute conditional density ratio of treatment
     Hn_aux = ones(length(Y))

@@ -51,7 +51,7 @@ scm_net =  StructuralCausalModel(
     dgp_net;
     treatment = [:A, :A_s],
     response = :Y)
-data_net = rand(scm_net, 100)
+data_net = rand(scm_net, 10000)
 data_net_sum = summarize(data_net)
 
 @testset "Intervention" begin
@@ -117,13 +117,14 @@ end
 end
 
 @testset "Truth" begin
+    Random.seed!(126)
     scm_test = StructuralCausalModel(
         @dgp(
-            L ~ Bernoulli(0.0),
+            L ~ Bernoulli(0.25),
             A ~ (@. Normal(L, 0.01)),
             G = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(A), 2)),
             As $ Sum(:A, :G),
-            Y ~ (@. Normal(L + A + As, 0.01))
+            Y ~ (@. Normal(L + A + As + A * L, 0.01))
         ),
         treatment = [:A, :As],
         response = :Y)
@@ -131,8 +132,7 @@ end
     intervention = AdditiveShift(1.0)
     
     truth = compute_true_MTP(scm_test, data_test, intervention).ψ
-
-    @test within(truth, 3, 0.01)
+    @test within(truth, 4.5, 0.1)
 end
 
 @testset "DecomposedPropensityRatio on Network" begin
