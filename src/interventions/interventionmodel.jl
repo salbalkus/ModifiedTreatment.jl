@@ -25,7 +25,7 @@ function get_summarized_data(O)
     
     # Apply summary function to the data and select only the variables that are not the response
     Os = CausalTables.summarize(O)
-    Os = CausalTables.replace(Os; data = Os |> Replace(missing => NaN))
+    #Os = CausalTables.replace(Os; data = Os |> Replace(missing => NaN))
 
     # Error handling
     nonsummary_treatments = Os.treatment[map(x -> x ∉ keys(Os.summaries), Os.treatment)]
