@@ -145,5 +145,9 @@ function MMI.predict(model::SumRatioHSE, fitresult, Xy_nu, Xy_de)
                                  X_de, y_de, ys_de, G_de)
     
     # Use the densities to compute the density ratio
-    return (g_nu ./ g_de) .* (gs_nu ./ gs_de)
+    Hn = (g_nu ./ g_de) .* (gs_nu ./ gs_de)
+
+    # Bound
+    Hn[Hn .> 5] .= 5
+    return Hn
 end

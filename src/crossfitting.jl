@@ -60,12 +60,12 @@ function MMI.fit(dp::DecomposedPropensityRatio, verbosity, X, Y)
 
         # Construct a table of the target
         target = cur_treatment_names[k]
-        Yk = Y |> TableTransforms.Select(target)
+        Yk = Y |> TableTransforms.Select(target) |> Tables.columntable
 
         # Construct a covariate table that includes future targets as covariates
         # This iteratively removes the target from the table of all variables
         all_col_names = filter(x -> x != target, all_col_names)
-        XY = XY |> TableTransforms.Select(all_col_names...)
+        XY = XY |> TableTransforms.Select(all_col_names...) |> Tables.columntable
 
         # Fit the propensity score ratio model of the current target, controlling for subsequent targets
         machines[k] = fit!(machine(dp.model, XY, Yk))
