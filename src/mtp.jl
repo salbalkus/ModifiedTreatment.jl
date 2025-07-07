@@ -101,8 +101,6 @@ function crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)
         dprmodel = DecomposedPropensityRatio(mtp.density_ratio_estimator)
     elseif ratio_model_type <: Condensity.ConDensityRatioEstimatorFixed
         dprmodel = mtp.density_ratio_estimator
-    else
-        throw(ArgumentError("Unrecognized density ratio estimator type. Density ratio estimator must be of type CondensityRatioEstimatorAdaptive or CondensityRatioEstimatorFixed."))
     end
 
     # Decide whether to cross-fit the models
