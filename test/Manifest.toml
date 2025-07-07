@@ -289,9 +289,9 @@ version = "0.1.15"
 
 [[deps.CausalTables]]
 deps = ["DataAPI", "Distributions", "LinearAlgebra", "MacroTools", "Missings", "NamedTupleTools", "PrettyTables", "SparseArrays", "StatsBase", "Tables"]
-git-tree-sha1 = "b2a37c7a2d18fd5d8c4a1d437423b1fa084eff18"
+path = "/home/salbalkus/.julia/dev/CausalTables"
 uuid = "6af48e0c-efc2-4bf7-a92f-a553ccf79fd6"
-version = "1.2.6"
+version = "1.2.7"
 
 [[deps.ChainRules]]
 deps = ["Adapt", "ChainRulesCore", "Compat", "Distributed", "GPUArraysCore", "IrrationalConstants", "LinearAlgebra", "Random", "RealDot", "SparseArrays", "SparseInverseSubset", "Statistics", "StructArrays", "SuiteSparse"]

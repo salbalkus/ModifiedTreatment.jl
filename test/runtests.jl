@@ -38,8 +38,8 @@ data_iid = rand(scm_iid, 100)
 dgp_net = @dgp(
     L1 ~ Binomial(5, 0.4),
     #G = Graphs.adjacency_matrix(Graphs.random_regular_graph(length(L1), 2)),
-    #G = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 5/length(L1))),
-    G = Graphs.adjacency_matrix(Graphs.static_scale_free(length(L1), 2 * length(L1), 3.5)),
+    G = Graphs.adjacency_matrix(Graphs.erdos_renyi(length(L1), 5/length(L1))),
+    #G = Graphs.adjacency_matrix(Graphs.static_scale_free(length(L1), 2 * length(L1), 3.5)),
     #G = Graphs.adjacency_matrix(Graphs.watts_strogatz(length(L1), 5, 0.5)),
     L1_s $ Sum(:L1, :G),
     A ~ (@. Normal(L1 + 1, 1.0)),
@@ -131,8 +131,8 @@ end
     data_test = rand(scm_test, 10000)
     intervention = AdditiveShift(1.0)
     
-    truth = compute_true_MTP(scm_test, data_test, intervention).ψ
-    @test within(truth, 4.5, 0.1)
+    truth = compute_true_MTP(scm_test, data_test, intervention).ψ_dif
+    @test within(truth, 3.25, 0.1)
 end
 
 @testset "DecomposedPropensityRatio on Network" begin
@@ -340,6 +340,33 @@ end
     #σ2boot_est = σ2boot(output)
     #@test !all(within.(values()[4:5] .* n_large, truth.eff_bound, moe))
     #@test all(values(σ2boot(output)) .< moe)
+
+end
+
+@testset "Sum-Location-Scale" begin
+    location_model = XGBoostRegressor(objective = "reg:squarederror", tree_method = "exact",
+                    num_round = 40, eta = 0.1, max_depth = 4, min_child_weight = 40)
+    scale_model = XGBoostRegressor(objective = "reg:squarederror", tree_method = "exact",
+                    num_round = 40, eta = 0.1, max_depth = 4, min_child_weight = 40)
+
+    density_model = KDE(0.01, Epanechnikov)
+
+    r = range(density_model, :bandwidth, lower=0.001, upper=0.5)
+    model = SumRatioHSE(location_model, scale_model, density_model, r, CV(nfolds=10))
+
+    X = treatmentparents(data_net_sum)
+    treat = treatment(data_net_sum)
+
+    mach = machine(model, X, treat) |> fit!
+
+    Xy_de = responseparents(data_net_sum)
+    Xy_nu = intervene(Xy_de, additive_mtp(-0.2))
+    
+    pred = predict(mach, Xy_nu, Xy_de)
+
+    true_ratio = propensity(scm_net, Xy_nu, :A) ./ propensity(scm_net, Xy_de, :A)
+
+    @test abs(mean(pred .- true_ratio)) < 0.25
 
 end
 

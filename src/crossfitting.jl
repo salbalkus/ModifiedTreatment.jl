@@ -1,5 +1,5 @@
 # Define a struct to hold the vector of Machine objects
-mutable struct CrossFitModel <: MMI.Model
+mutable struct CrossFitModel <: MMI.Supervised
     model::MMI.Model
     resampling::MT.ResamplingStrategy
 end
@@ -134,6 +134,4 @@ MMI.predict(sl::SuperLearnerProbabilistic, fitresult, X) = MMI.predict(fitresult
 
 SuperLearner(models::Vector{<:MMI.Deterministic}, resampling) = SuperLearnerDeterministic(models, resampling)
 SuperLearner(models::Vector{<:MMI.Probabilistic}, resampling) = SuperLearnerProbabilistic(models, resampling)
-
-
 

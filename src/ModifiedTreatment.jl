@@ -63,6 +63,9 @@ module ModifiedTreatment
     include("bootstrap.jl")
     export bootstrap, bootstrap!
 
+    include("sumlocationscale.jl")
+    export SumRatioHSE, fit_density, predict_density
+
     # general
     export prefit, fit, transform, inverse_transform, predict
 
