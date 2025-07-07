@@ -27,6 +27,10 @@ function fit_density(model::SumRatioHSE, verbosity, X, y, ys, G)
     σ2[σ2 .<= 0] .= min_obs_ε2
     ε = @. ε / sqrt(σ2)
 
+    # Bound the errors
+    ε = @. max(ε, -10)
+    ε = @. min(ε, 10)
+
     tuned_density_model = MT.TunedModel(
         # TODO: Pick better default bandwidth?
         model = model.density_model,
@@ -45,6 +49,11 @@ function fit_density(model::SumRatioHSE, verbosity, X, y, ys, G)
     σ2s[σ2s .<= 0] .= min_obs_ε2
     rootσ2s = sqrt.(σ2s)
     εs = (ys .- μs) ./ rootσ2s
+
+    # Bound the errors
+    εs = @. max(ε, -10)
+    εs = @. min(ε, 10)
+    print(mean(isnan.(εs)))
 
     tuned_density_model_sum = MT.TunedModel(
         # TODO: Pick better default bandwidth?

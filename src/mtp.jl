@@ -114,7 +114,7 @@ function crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)
 
     # Construct machines bound to appropriate data
     mach_mean = machine(mtp.mean_estimator, LAs, Y)
-    if ratio_model_type <: Condensity.ConDensityRatioEstimatorAdaptive
+    if (ratio_model_type <: Condensity.ConDensityRatioEstimatorAdaptive) || (ratio_model_type <: SumRatioHSE)
         mach_density = machine(dr_model, Ls, As)
     else # if ratio_model_type <: Condensity.ConDensityRatioEstimatorFixed
         mach_density = machine(dr_model, LAδsinv, LAs)
