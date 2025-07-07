@@ -97,7 +97,7 @@ function crossfit_nuisance_estimators(mtp, Y, LAs, LAδsinv, Ls, As)
     # If the density ratio estimator is adaptive, we need to ensure multiple estimators are fit for each factorized component
     # (Otherwise, this is handled automatically by fixed density ratio estimators)
     ratio_model_type = typeof(mtp.density_ratio_estimator)
-    if ratio_model_type <: Condensity.ConDensityRatioEstimatorAdaptive
+    if (ratio_model_type <: Condensity.ConDensityRatioEstimatorAdaptive) && !(ratio_model_type <: SumRatioHSE)
         dprmodel = DecomposedPropensityRatio(mtp.density_ratio_estimator)
     elseif ratio_model_type <: Condensity.ConDensityRatioEstimatorFixed
         dprmodel = mtp.density_ratio_estimator

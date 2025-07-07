@@ -1,4 +1,4 @@
-mutable struct SumRatioHSE <: Condensity.ConDensityEstimator
+mutable struct SumRatioHSE <: Condensity.ConDensityRatioEstimator
     location_model::MMI.Supervised
     scale_model::MMI.Supervised
     density_model::Condensity.DensityEstimator
