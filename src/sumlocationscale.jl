@@ -74,7 +74,7 @@ end
 # Assumes the first column of y is the non-summarized variable
 function MMI.fit(model::SumRatioHSE, verbosity, X, y)
 
-    treatmentnames = Tables.columnnames(y)
+    treatmentnames = collect(Tables.columnnames(y))
     y_vec = Tables.getcolumn(y, treatmentnames[1])
     ys_vec = Tables.getcolumn(y, treatmentnames[2])
     G = CausalTables.adjacency_matrix(X)
