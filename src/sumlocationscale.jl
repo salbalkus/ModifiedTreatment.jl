@@ -39,10 +39,10 @@ function fit_density(model::SumRatioHSE, verbosity, X, y, ys, G)
         resampling = model.resampling,
         measure = negmeanloglik,
         operation = MMI.predict,
-        range = model.r_density
+        range = model.r_density,
         )
     
-    density_mach = machine(tuned_density_model, (ε = ε,), zeros(length(ε))) |> fit!
+    density_mach = fit!(machine(tuned_density_model, (ε = ε,), zeros(length(ε))), verbosity = -1)
 
     μs = G * μ
     σ2s = G * σ2
@@ -53,7 +53,6 @@ function fit_density(model::SumRatioHSE, verbosity, X, y, ys, G)
     # Bound the errors
     εs = @. max(ε, -10)
     εs = @. min(ε, 10)
-    print(mean(isnan.(εs)))
 
     tuned_density_model_sum = MT.TunedModel(
         # TODO: Pick better default bandwidth?
@@ -63,10 +62,10 @@ function fit_density(model::SumRatioHSE, verbosity, X, y, ys, G)
         resampling = model.resampling,
         measure = negmeanloglik,
         operation = MMI.predict,
-        range = model.r_density
+        range = model.r_density,
         )
 
-    sum_density_mach = machine(tuned_density_model_sum, (ε = εs,), zeros(length(ε))) |> fit!
+    sum_density_mach = fit!(machine(tuned_density_model_sum, (ε = εs,), zeros(length(ε))), verbosity = -1)
 
 
     return location_mach, scale_mach, density_mach, sum_density_mach, min_obs_ε2
@@ -149,5 +148,6 @@ function MMI.predict(model::SumRatioHSE, fitresult, Xy_nu, Xy_de)
 
     # Bound
     Hn[Hn .> 5] .= 5
+    Hn[isnan.(Hn)] .= 0.0
     return Hn
 end

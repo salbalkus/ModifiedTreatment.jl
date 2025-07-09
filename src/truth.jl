@@ -31,7 +31,7 @@ function compute_true_MTP(dgp, data, intervention)
     GA = CausalTables.adjacency_matrix(data)
     GD = CausalTables.dependency_matrix(data)
     D = Hn_aux .* (Y .- Q0bar_noshift) .+ Q0bar_shift
-    eff_bound = network_variance(D, GA, GD) * length(D)
+    eff_bound = network_variance(D, GA, GD) * length(D) ./ log(length(D)).^2
     true_result = (ψ = ψ, ψ_dif = ψ - mean(Y), eff_bound = eff_bound)
     return true_result
 end
