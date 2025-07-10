@@ -77,7 +77,7 @@ function MMI.fit(model::SumRatioHSE, verbosity, X, y)
     treatmentnames = collect(Tables.columnnames(y))
     y_vec = Tables.getcolumn(y, treatmentnames[1])
     ys_vec = Tables.getcolumn(y, treatmentnames[2])
-    G = CausalTables.adjacency_matrix(X)
+    G = X.arrays[X.summaries[treatmentnames[2]].matrix]
     location_mach, scale_mach, density_mach, sum_density_mach, min_obs_ε2 = fit_density(model, verbosity, X, y_vec, ys_vec, G)
     
     fitresult = (location_mach = location_mach,  
