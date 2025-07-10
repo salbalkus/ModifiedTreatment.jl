@@ -121,12 +121,12 @@ function MMI.predict(model::SumRatioHSE, fitresult, Xy_nu, Xy_de)
     y_nu = Tables.getcolumn(Xy_nu, fitresult.treatmentnames[1])
     ys_nu = Tables.getcolumn(Xy_nu, fitresult.treatmentnames[2])
     X_nu = CausalTables.reject(Xy_nu, fitresult.treatmentnames)
-    G_nu = y_nu.arrays[y_nu.summaries[treatmentnames[2]].matrix]
+    G_nu = Xy_nu.arrays[Xy_nu.summaries[treatmentnames[2]].matrix]
 
     y_de = Tables.getcolumn(Xy_de, fitresult.treatmentnames[1])
     ys_de = Tables.getcolumn(Xy_de, fitresult.treatmentnames[2])
     X_de = CausalTables.reject(Xy_de, fitresult.treatmentnames)
-    G_de = y_de.arrays[y_de.summaries[treatmentnames[2]].matrix]
+    G_de = Xy_de.arrays[Xy_de.summaries[treatmentnames[2]].matrix]
 
     # compute density
     g_nu, gs_nu = predict_density(fitresult.location_mach, 
